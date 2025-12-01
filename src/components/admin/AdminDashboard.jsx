@@ -5,7 +5,7 @@ import StoreList from "./StoreList";
 import StoreForm from "./StoreForm";
 import { useToast } from "../../context/ToastContext";
 import { useDialog } from "../../context/DialogContext";
-import api from "../../utils/api"; // API ફાઈલ ઈમ્પોર્ટ કરી
+import api from "../../utils/api"; // API ફાઈલ ઈમ્પોર્ટ કરી sukam
 
 export default function AdminDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState("dashboard");
@@ -42,7 +42,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 await api.post("/stores", storeData);
                 toast.success("New store registered in Database");
             }
-            
+
             // ફોર્મ બંધ કરો અને ડેટા રિફ્રેશ કરો
             setIsFormOpen(false);
             setEditingStore(null);
@@ -61,7 +61,7 @@ export default function AdminDashboard({ user, onLogout }) {
             message: "This will permanently delete the store from the Database. Are you sure?",
             type: "danger",
         });
-        
+
         if (confirmed) {
             try {
                 await api.delete(`/stores/${storeId}`);
@@ -79,7 +79,7 @@ export default function AdminDashboard({ user, onLogout }) {
         if (!store) return;
 
         const newStatus = store.status === "active" ? "suspended" : "active";
-        
+
         try {
             // માત્ર સ્ટેટસ અપડેટ કરવા માટે PUT રિક્વેસ્ટ
             await api.put(`/stores/${storeId}`, { ...store, status: newStatus });
