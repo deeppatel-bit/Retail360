@@ -4,6 +4,7 @@ import { Search, Calendar, ShoppingCart, PackageX } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
+import SearchableDropdown from "../common/SearchableDropdown";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -86,8 +87,9 @@ export default function PurchaseList() {
         </Link>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 bg-card p-4 rounded-xl shadow-sm border border-border">
-        <div className="relative flex-1">
+      <div className="bg-card p-4 rounded-xl shadow-sm border border-border space-y-4">
+        {/* Search Bar */}
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <input
             type="text"
@@ -98,33 +100,37 @@ export default function PurchaseList() {
           />
         </div>
 
-        <div className="flex gap-2 items-center">
-          <Calendar className="text-muted-foreground" size={18} />
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
-            className="px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-foreground bg-background"
-          />
-          <span className="self-center text-muted-foreground font-medium">to</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
-            className="px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-foreground bg-background"
+        {/* Date Range and Status Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <Calendar className="text-muted-foreground flex-shrink-0" size={18} />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
+              className="flex-1 px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-foreground bg-background text-sm"
+            />
+            <span className="text-muted-foreground font-medium flex-shrink-0">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
+              className="flex-1 px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-foreground bg-background text-sm"
+            />
+          </div>
+
+          <SearchableDropdown
+            options={[
+              { value: "All", label: "All Status" },
+              { value: "Paid", label: "Paid" },
+              { value: "Partial", label: "Partial" },
+              { value: "Unpaid", label: "Unpaid" }
+            ]}
+            value={statusFilter}
+            onChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
+            placeholder="Filter by status..."
           />
         </div>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
-        >
-          <option value="All">All Status</option>
-          <option value="Paid">Paid</option>
-          <option value="Partial">Partial</option>
-          <option value="Unpaid">Unpaid</option>
-        </select>
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
@@ -133,8 +139,7 @@ export default function PurchaseList() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedPurchases.map((p) => (
-                <tr key={p.purchaseId} className="hover:bg-accent/50 transition-colors group relative">
-                  <td className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
+                <tr key={p.purchaseId} className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-emerald-600">
                   <td className="p-4 text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
                   <td className="p-4 font-medium text-foreground">{p.supplierName}</td>
                   <td className="p-4 text-muted-foreground">{p.billNo || "-"}</td>

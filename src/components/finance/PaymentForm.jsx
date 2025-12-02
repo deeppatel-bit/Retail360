@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Save } from "lucide-react";
 
 import { useStore } from "../../context/StoreContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function PaymentForm() {
     const { addPayment } = useStore();
+    const toast = useToast();
     const navigate = useNavigate();
     const [supplierName, setSupplierName] = useState("");
     const [amount, setAmount] = useState("");
@@ -15,7 +17,10 @@ export default function PaymentForm() {
 
     function handleSubmit(e) {
         e.preventDefault();
-        if (!supplierName || !amount) return alert("Please fill required fields");
+        if (!supplierName || !amount) {
+            toast.error("Please fill all required fields");
+            return;
+        }
 
         addPayment({
             supplierName,
@@ -24,7 +29,7 @@ export default function PaymentForm() {
             mode,
             note
         });
-        alert("Payment Saved!");
+        toast.success("Payment saved successfully!");
         navigate("/payments");
     }
 

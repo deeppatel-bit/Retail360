@@ -14,6 +14,7 @@ import { useToast } from "../../context/ToastContext";
 **/
 
 import { useStore } from "../../context/StoreContext";
+import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function PurchaseForm({ editMode }) {
   const { products, suppliers, addPurchase, updatePurchase, purchases } = useStore();
@@ -162,18 +163,12 @@ export default function PurchaseForm({ editMode }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Supplier</label>
-            <select
+            <SearchableDropdown
+              options={suppliers.map(sup => ({ value: sup.name, label: sup.name }))}
               value={supplierName}
-              onChange={(e) => setSupplierName(e.target.value)}
-              className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-background text-foreground"
-            >
-              <option value="">-- Select Supplier --</option>
-              {suppliers.map((sup) => (
-                <option key={sup.id} value={sup.name}>
-                  {sup.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSupplierName(val)}
+              placeholder="Search or select supplier..."
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Bill No</label>
@@ -225,18 +220,12 @@ export default function PurchaseForm({ editMode }) {
                       className="hover:bg-accent/50"
                     >
                       <td className="px-4 py-2">
-                        <select
+                        <SearchableDropdown
+                          options={products.map(p => ({ value: p.id, label: `${p.name} (${p.unit})` }))}
                           value={ln.productId}
-                          onChange={(e) => changeLine(i, "productId", e.target.value)}
-                          className="w-full border-input border px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
-                        >
-                          <option value="">-- Select Product --</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.unit})
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => changeLine(i, "productId", val)}
+                          placeholder="Search product..."
+                        />
                       </td>
                       <td className="px-4 py-2 text-sm text-muted-foreground">
                         {p ? `${stock} ${p.unit}` : "-"}

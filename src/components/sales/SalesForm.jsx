@@ -4,6 +4,7 @@ import { Plus, Trash2, AlertCircle } from "lucide-react";
 import { useToast } from "../../context/ToastContext";
 
 import { useStore } from "../../context/StoreContext";
+import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function SalesForm({ editMode }) {
   const { products, addSale, updateSale, sales } = useStore();
@@ -199,18 +200,12 @@ export default function SalesForm({ editMode }) {
                 return (
                   <tr key={i} className="hover:bg-accent/50">
                     <td className="px-4 py-2">
-                      <select
+                      <SearchableDropdown
+                        options={products.map(p => ({ value: p.id, label: p.name }))}
                         value={ln.productId}
-                        onChange={(e) => changeLine(i, "productId", e.target.value)}
-                        className="w-full border-input border px-3 py-2 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground"
-                      >
-                        <option value="">-- Select Product --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => changeLine(i, "productId", val)}
+                        placeholder="Search or select product..."
+                      />
                     </td>
                     <td className="px-4 py-2 text-sm">
                       {p ? (

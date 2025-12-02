@@ -4,6 +4,8 @@ import { Plus, Edit, Trash2, Search, Filter, Package as PackageIcon, PackageX } 
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
+import SearchableDropdown from "../common/SearchableDropdown";
+
 
 const ITEMS_PER_PAGE = 10;
 
@@ -99,29 +101,25 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div className="relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={16} />
-          <select
+        <div>
+          <SearchableDropdown
+            options={uniqueCategories.map(cat => ({ value: cat, label: cat === "All" ? "All Categories" : cat }))}
             value={categoryFilter}
-            onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-            className="pl-9 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground appearance-none cursor-pointer"
-          >
-            {uniqueCategories.map(cat => (
-              <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
-            ))}
-          </select>
+            onChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}
+            placeholder="Filter by category..."
+          />
         </div>
 
-        <div className="relative">
-          <PackageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={16} />
-          <select
+        <div>
+          <SearchableDropdown
+            options={[
+              { value: "All", label: "All Stock" },
+              { value: "Low Stock", label: "Low Stock Only" }
+            ]}
             value={stockFilter}
-            onChange={(e) => { setStockFilter(e.target.value); setCurrentPage(1); }}
-            className="pl-9 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground appearance-none cursor-pointer"
-          >
-            <option value="All">All Stock</option>
-            <option value="Low Stock">Low Stock Only</option>
-          </select>
+            onChange={(val) => { setStockFilter(val); setCurrentPage(1); }}
+            placeholder="Filter by stock..."
+          />
         </div>
       </div>
 
@@ -131,8 +129,7 @@ export default function ProductsPage() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedProducts.map((p) => (
-                <tr key={p.id} className="hover:bg-accent/50 transition-colors group relative">
-                  <td className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
+                <tr key={p.id} className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-primary">
                   <td className="p-3 font-medium text-foreground">{p.name}</td>
                   <td className="p-3 text-muted-foreground">{p.category}</td>
 

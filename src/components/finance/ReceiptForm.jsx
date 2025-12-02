@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Save } from "lucide-react";
 
 import { useStore } from "../../context/StoreContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function ReceiptForm() {
     const { addReceipt } = useStore();
+    const toast = useToast();
     const navigate = useNavigate();
     const [customerName, setCustomerName] = useState("");
     const [amount, setAmount] = useState("");
@@ -15,7 +17,10 @@ export default function ReceiptForm() {
 
     function handleSubmit(e) {
         e.preventDefault();
-        if (!customerName || !amount) return alert("Please fill required fields");
+        if (!customerName || !amount) {
+            toast.error("Please fill all required fields");
+            return;
+        }
 
         addReceipt({
             customerName,
@@ -24,7 +29,7 @@ export default function ReceiptForm() {
             mode,
             note
         });
-        alert("Receipt Saved!");
+        toast.success("Receipt saved successfully!");
         navigate("/receipts");
     }
 
