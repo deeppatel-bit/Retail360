@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Calendar, ShoppingCart, PackageX } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
@@ -77,8 +77,11 @@ export default function PurchaseList() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl font-bold text-foreground">Purchases History</h2>
-        <Link to="/purchase/add" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap">
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <ShoppingCart className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+          Purchases History
+        </h2>
+        <Link to="/purchase/add" className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-500/30 whitespace-nowrap">
           + Add Purchase
         </Link>
       </div>
@@ -91,18 +94,19 @@ export default function PurchaseList() {
             placeholder="Search supplier or bill..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground transition-all focus:scale-[1.01]"
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <Calendar className="text-muted-foreground" size={18} />
           <input
             type="date"
             value={startDate}
             onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
             className="px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-foreground bg-background"
           />
-          <span className="self-center text-muted-foreground">to</span>
+          <span className="self-center text-muted-foreground font-medium">to</span>
           <input
             type="date"
             value={endDate}
@@ -129,7 +133,8 @@ export default function PurchaseList() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedPurchases.map((p) => (
-                <tr key={p.purchaseId} className="hover:bg-accent/50 transition-colors">
+                <tr key={p.purchaseId} className="hover:bg-accent/50 transition-colors group relative">
+                  <td className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
                   <td className="p-4 text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
                   <td className="p-4 font-medium text-foreground">{p.supplierName}</td>
                   <td className="p-4 text-muted-foreground">{p.billNo || "-"}</td>
@@ -138,16 +143,20 @@ export default function PurchaseList() {
                       {p.lines.length}
                     </span>
                   </td>
-                  <td className="p-4 font-semibold text-foreground">₹ {Number(p.total).toFixed(2)}</td>
+                  <td className="p-4 font-bold text-lg text-foreground">₹ {Number(p.total).toFixed(2)}</td>
                   <td className="p-4 text-muted-foreground">₹ {Number(p.amountPaid || 0).toFixed(2)}</td>
                   <td className="p-4 text-destructive font-medium">
                     {p.balanceDue > 0 ? `₹ ${Number(p.balanceDue).toFixed(2)}` : "-"}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.paymentStatus === "Paid" ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400" :
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 ${p.paymentStatus === "Paid" ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400" :
                       p.paymentStatus === "Partial" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400" :
                         "bg-destructive/10 text-destructive"
                       }`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${p.paymentStatus === "Paid" ? "bg-green-500" :
+                        p.paymentStatus === "Partial" ? "bg-yellow-500" :
+                          "bg-destructive"
+                        }`} />
                       {p.paymentStatus || "Unpaid"}
                     </span>
                   </td>
@@ -159,8 +168,21 @@ export default function PurchaseList() {
               ))}
               {!paginatedPurchases.length && (
                 <tr>
-                  <td colSpan="9" className="p-8 text-center text-muted-foreground">
-                    {search ? "No matching purchases found." : "No purchases recorded yet."}
+                  <td colSpan="9" className="p-12 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-3">
+                      <PackageX className="w-16 h-16 opacity-30" />
+                      <p className="text-lg font-medium">
+                        {search ? "No matching purchases found." : "No purchases recorded yet."}
+                      </p>
+                      {!search && (
+                        <Link
+                          to="/purchase/add"
+                          className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                        >
+                          Add Your First Purchase
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}

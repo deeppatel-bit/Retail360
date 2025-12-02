@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Package as PackageIcon, PackageX } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
@@ -75,10 +75,13 @@ export default function ProductsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl font-bold text-foreground">Product Inventory</h2>
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <PackageIcon className="w-7 h-7 text-primary" />
+          Product Inventory
+        </h2>
         <button
           onClick={() => navigate('/products/new')}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+          className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
         >
           <Plus className="w-5" /> Add New Product
         </button>
@@ -92,28 +95,34 @@ export default function ProductsPage() {
             placeholder="Search products..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground transition-all focus:scale-[1.01]"
           />
         </div>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground"
-        >
-          {uniqueCategories.map(cat => (
-            <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={16} />
+          <select
+            value={categoryFilter}
+            onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+            className="pl-9 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground appearance-none cursor-pointer"
+          >
+            {uniqueCategories.map(cat => (
+              <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
+            ))}
+          </select>
+        </div>
 
-        <select
-          value={stockFilter}
-          onChange={(e) => { setStockFilter(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground"
-        >
-          <option value="All">All Stock</option>
-          <option value="Low Stock">Low Stock Only</option>
-        </select>
+        <div className="relative">
+          <PackageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={16} />
+          <select
+            value={stockFilter}
+            onChange={(e) => { setStockFilter(e.target.value); setCurrentPage(1); }}
+            className="pl-9 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground appearance-none cursor-pointer"
+          >
+            <option value="All">All Stock</option>
+            <option value="Low Stock">Low Stock Only</option>
+          </select>
+        </div>
       </div>
 
       <div className="bg-card rounded-xl shadow border border-border overflow-hidden">
@@ -122,17 +131,19 @@ export default function ProductsPage() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedProducts.map((p) => (
-                <tr key={p.id} className="hover:bg-accent/50">
+                <tr key={p.id} className="hover:bg-accent/50 transition-colors group relative">
+                  <td className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
                   <td className="p-3 font-medium text-foreground">{p.name}</td>
                   <td className="p-3 text-muted-foreground">{p.category}</td>
 
                   <td className="p-3">
                     <span
-                      className={`px-2 py-1 text-xs rounded-full ${p.stock <= (p.reorder || 5)
-                          ? "bg-destructive/10 text-destructive"
+                      className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${p.stock <= (p.reorder || 5)
+                          ? "bg-destructive/10 text-destructive animate-pulse"
                           : "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400"
                         }`}
                     >
+                      {p.stock <= (p.reorder || 5) && <span className="w-1.5 h-1.5 bg-destructive rounded-full animate-ping" />}
                       {p.stock} {p.unit}
                     </span>
                   </td>
@@ -159,8 +170,21 @@ export default function ProductsPage() {
               ))}
               {!paginatedProducts.length && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-muted-foreground">
-                    {search ? "No matching products found." : "No products in inventory."}
+                  <td colSpan="6" className="p-12 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-3">
+                      <PackageX className="w-16 h-16 opacity-30" />
+                      <p className="text-lg font-medium">
+                        {search ? "No matching products found." : "No products in inventory."}
+                      </p>
+                      {!search && (
+                        <button
+                          onClick={() => navigate('/products/new')}
+                          className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Add Your First Product
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}

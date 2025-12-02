@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import StatCard from "../StatCard";
-import { DollarSign, Package, AlertTriangle } from "lucide-react";
+import { DollarSign, Package, AlertTriangle, TrendingUp, ShoppingBag, PackageX } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStore } from "../../context/StoreContext";
 
@@ -79,63 +79,92 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div variants={itemVariants} className="lg:col-span-2 bg-card p-6 rounded-xl shadow-lg border border-border">
-          <h3 className="text-xl font-semibold mb-4 border-b border-border pb-2 text-foreground">Recent Activity</h3>
+        <motion.div variants={itemVariants} className="lg:col-span-2 bg-card p-6 rounded-2xl shadow-lg border border-border">
+          <h3 className="text-xl font-semibold mb-4 border-b border-border pb-3 text-foreground flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            Recent Activity
+          </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <div className="font-semibold text-foreground mb-2">Recent Purchases</div>
+              <div className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                Recent Purchases
+              </div>
               <ul className="divide-y divide-border">
-                {purchases.slice(0, 6).map((p) => (
-                  <li key={p.purchaseId} className="py-2 flex justify-between items-center">
+                {purchases.slice(0, 6).map((p, idx) => (
+                  <motion.li 
+                    key={p.purchaseId} 
+                    className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
+                    whileHover={{ x: 4 }}
+                  >
                     <div>
                       <div className="font-medium text-sm text-foreground">{p.supplierName}</div>
                       <div className="text-xs text-muted-foreground">{new Date(p.date).toLocaleDateString()}</div>
                     </div>
-                    <div className="font-semibold text-sm text-foreground">₹ {Number(p.total).toFixed(2)}</div>
-                  </li>
+                    <div className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">₹ {Number(p.total).toFixed(2)}</div>
+                  </motion.li>
                 ))}
-                {!purchases.length && <li className="py-2 text-muted-foreground text-sm">No purchases yet.</li>}
+                {!purchases.length && (
+                  <li className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+                    <PackageX className="w-8 h-8 opacity-50" />
+                    No purchases yet.
+                  </li>
+                )}
               </ul>
             </div>
 
             <div>
-              <div className="font-semibold text-foreground mb-2">Recent Sales</div>
+              <div className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                Recent Sales
+              </div>
               <ul className="divide-y divide-border">
-                {sales.slice(0, 6).map((s) => (
-                  <li key={s.saleId} className="py-2 flex justify-between items-center">
+                {sales.slice(0, 6).map((s, idx) => (
+                  <motion.li 
+                    key={s.saleId} 
+                    className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
+                    whileHover={{ x: 4 }}
+                  >
                     <div>
                       <div className="font-medium text-sm text-foreground">{s.customerName}</div>
                       <div className="text-xs text-muted-foreground">{new Date(s.date).toLocaleDateString()}</div>
                     </div>
-                    <div className="font-semibold text-sm text-foreground">₹ {Number(s.total).toFixed(2)}</div>
-                  </li>
+                    <div className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">₹ {Number(s.total).toFixed(2)}</div>
+                  </motion.li>
                 ))}
-                {!sales.length && <li className="py-2 text-muted-foreground text-sm">No sales yet.</li>}
+                {!sales.length && (
+                  <li className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+                    <PackageX className="w-8 h-8 opacity-50" />
+                    No sales yet.
+                  </li>
+                )}
               </ul>
             </div>
           </div>
         </motion.div>
 
-        <motion.div variants={itemVariants} className="bg-card p-6 rounded-xl shadow-lg border border-border h-fit">
-          <h3 className="text-xl font-semibold mb-4 border-b border-border pb-2 text-foreground">Quick Actions</h3>
+        <motion.div variants={itemVariants} className="bg-gradient-to-br from-card to-accent/20 p-6 rounded-2xl shadow-lg border border-border h-fit">
+          <h3 className="text-xl font-semibold mb-4 border-b border-border pb-3 text-foreground">Quick Actions</h3>
           <div className="space-y-4">
             <div className="text-muted-foreground text-sm">Use these shortcuts to quickly add new records.</div>
             <div className="flex flex-col gap-3">
               <motion.button
-                whileHover={{ scale: 1.02 }}
+                whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => navigate("/sales/add")}
-                className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2"
               >
+                <DollarSign className="w-5 h-5" />
                 New Sale
               </motion.button>
               <motion.button
-                whileHover={{ scale: 1.02 }}
+                whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => navigate("/purchase/add")}
-                className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                className="w-full px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2"
               >
+                <ShoppingBag className="w-5 h-5" />
                 New Purchase
               </motion.button>
             </div>

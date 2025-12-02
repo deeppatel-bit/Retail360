@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Calendar, FileText, PackageX } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
@@ -78,8 +78,11 @@ export default function SalesList() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl font-bold text-foreground">Sales History</h2>
-        <Link to="/sales/add" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap">
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <FileText className="w-7 h-7 text-primary" />
+          Sales History
+        </h2>
+        <Link to="/sales/add" className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-500/30 whitespace-nowrap">
           + New Sale
         </Link>
       </div>
@@ -92,18 +95,19 @@ export default function SalesList() {
             placeholder="Search customer or ID..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-background text-foreground transition-all focus:scale-[1.01]"
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <Calendar className="text-muted-foreground" size={18} />
           <input
             type="date"
             value={startDate}
             onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
             className="px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-foreground bg-background"
           />
-          <span className="self-center text-muted-foreground">to</span>
+          <span className="self-center text-muted-foreground font-medium">to</span>
           <input
             type="date"
             value={endDate}
@@ -130,25 +134,30 @@ export default function SalesList() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedSales.map((s) => (
-                <tr key={s.saleId} className="hover:bg-accent/50 transition-colors">
+                <tr key={s.saleId} className="hover:bg-accent/50 transition-colors group relative">
+                  <td className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
                   <td className="p-4 text-muted-foreground">{new Date(s.date).toLocaleDateString()}</td>
-                  <td className="p-4 font-medium text-indigo-600 dark:text-indigo-400">{s.saleId}</td>
+                  <td className="p-4 font-mono text-sm font-semibold text-indigo-600 dark:text-indigo-400">{s.saleId}</td>
                   <td className="p-4 font-medium text-foreground">{s.customerName}</td>
                   <td className="p-4 text-center">
                     <span className="bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs font-medium">
                       {s.lines.length}
                     </span>
                   </td>
-                  <td className="p-4 font-semibold text-foreground">₹ {Number(s.total).toFixed(2)}</td>
+                  <td className="p-4 font-bold text-lg text-foreground">₹ {Number(s.total).toFixed(2)}</td>
                   <td className="p-4 text-muted-foreground">₹ {Number(s.amountPaid || 0).toFixed(2)}</td>
                   <td className="p-4 text-destructive font-medium">
                     {s.balanceDue > 0 ? `₹ ${Number(s.balanceDue).toFixed(2)}` : "-"}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.paymentStatus === "Paid" ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400" :
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 ${s.paymentStatus === "Paid" ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400" :
                       s.paymentStatus === "Partial" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400" :
                         "bg-destructive/10 text-destructive"
                       }`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${s.paymentStatus === "Paid" ? "bg-green-500" :
+                        s.paymentStatus === "Partial" ? "bg-yellow-500" :
+                          "bg-destructive"
+                        }`} />
                       {s.paymentStatus || "Unpaid"}
                     </span>
                   </td>
@@ -160,8 +169,21 @@ export default function SalesList() {
               ))}
               {!paginatedSales.length && (
                 <tr>
-                  <td colSpan="9" className="p-8 text-center text-muted-foreground">
-                    {search ? "No matching sales found." : "No sales recorded yet."}
+                  <td colSpan="9" className="p-12 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-3">
+                      <PackageX className="w-16 h-16 opacity-30" />
+                      <p className="text-lg font-medium">
+                        {search ? "No matching sales found." : "No sales recorded yet."}
+                      </p>
+                      {!search && (
+                        <Link
+                          to="/sales/add"
+                          className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Record Your First Sale
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}

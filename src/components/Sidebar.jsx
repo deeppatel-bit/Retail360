@@ -21,16 +21,17 @@ export default function Sidebar() {
   return (
 
     <aside className="w-64 bg-card/90 backdrop-blur-md border-r border-border flex flex-col shadow-lg z-20">
-      <div className="p-6 border-b border-border">
+      <div className="p-6 border-b border-border bg-gradient-to-br from-card to-accent/10">
         <h1 className="text-2xl font-extrabold text-primary tracking-tight flex items-center gap-2">
           <motion.div
             initial={{ rotate: -10 }}
             animate={{ rotate: 0 }}
             transition={{ duration: 0.5, type: "spring" }}
+            className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30"
           >
-            🛍️
+            <span className="text-2xl">🛍️</span>
           </motion.div>
-          Retail<span className="text-foreground">360</span>
+          Retail<span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">360</span>
         </h1>
       </div>
 
@@ -43,24 +44,36 @@ export default function Sidebar() {
                 <NavLink
                   to={it.to}
                   className={({ isActive }) =>
-                    `relative w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 group overflow-hidden ${isActive ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+                    `relative w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group overflow-hidden ${isActive ? "text-primary font-semibold bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                     }`
                   }
                 >
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <motion.div
-                          layoutId="activeTab"
-                          className="absolute inset-0 bg-primary/10 rounded-lg"
-                          initial={false}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
+                        <>
+                          <motion.div
+                            layoutId="activeTab"
+                            className="absolute inset-0 bg-primary/10 rounded-lg"
+                            initial={false}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          />
+                          <motion.div
+                            layoutId="activeBorder"
+                            className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-purple-600 rounded-r"
+                            initial={false}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          />
+                        </>
                       )}
-                      <span className="relative z-10 flex items-center gap-3">
+                      <motion.span 
+                        className="relative z-10 flex items-center gap-3"
+                        whileHover={{ x: 2 }}
+                        transition={{ duration: 0.2 }}
+                      >
                         <Icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
                         {it.label}
-                      </span>
+                      </motion.span>
                     </>
                   )}
                 </NavLink>
@@ -70,8 +83,8 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-border text-sm text-muted-foreground">
-        <p>Version 1.1</p>
+      <div className="p-4 border-t border-border text-sm">
+        <p className="bg-gradient-to-r from-muted-foreground to-primary/70 bg-clip-text text-transparent font-medium">Version 1.1</p>
       </div>
     </aside>
   );
