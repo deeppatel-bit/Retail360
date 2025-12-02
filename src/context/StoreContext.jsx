@@ -23,16 +23,18 @@ export function StoreProvider({ user, children }) {
     const LS_RECEIPTS = `${PREFIX}receipts`;
     const LS_PAYMENTS = `${PREFIX}payments`;
     const LS_SETTINGS = `${PREFIX}settings`;
+    const LS_LEDGERS = `${PREFIX}ledgers`;
 
     // data with LocalStorage persistence
     const [products, setProducts] = useState(() =>
         readLS(LS_PRODUCTS, [
-            { id: "p1", name: "Rice 5kg", category: "Grocery", unit: "kg", stock: 12, costPrice: 250, sellPrice: 300, reorder: 5 },
+            { id: "p1", name: "Rice 1kg", category: "Grocery", unit: "kg", stock: 12, costPrice: 250, sellPrice: 300, reorder: 5 },
             { id: "p2", name: "Notebook", category: "Stationery", unit: "pcs", stock: 40, costPrice: 20, sellPrice: 35, reorder: 10 },
             { id: "p3", name: "Toothpaste", category: "Personal Care", unit: "pcs", stock: 6, costPrice: 60, sellPrice: 90, reorder: 5 },
         ])
     );
     const [suppliers, setSuppliers] = useState(() => readLS(LS_SUPPLIERS, []));
+    const [ledgers, setLedgers] = useState(() => readLS(LS_LEDGERS, []));
     const [purchases, setPurchases] = useState(() => readLS(LS_PURCHASES, []));
     const [sales, setSales] = useState(() => readLS(LS_SALES, []));
     const [receipts, setReceipts] = useState(() => readLS(LS_RECEIPTS, []));
@@ -46,6 +48,7 @@ export function StoreProvider({ user, children }) {
 
     useEffect(() => writeLS(LS_PRODUCTS, products), [products, LS_PRODUCTS]);
     useEffect(() => writeLS(LS_SUPPLIERS, suppliers), [suppliers, LS_SUPPLIERS]);
+    useEffect(() => writeLS(LS_LEDGERS, ledgers), [ledgers, LS_LEDGERS]);
     useEffect(() => writeLS(LS_PURCHASES, purchases), [purchases, LS_PURCHASES]);
     useEffect(() => writeLS(LS_SALES, sales), [sales, LS_SALES]);
     useEffect(() => writeLS(LS_RECEIPTS, receipts), [receipts, LS_RECEIPTS]);
@@ -73,6 +76,29 @@ export function StoreProvider({ user, children }) {
         if (!confirmed) return;
         setSuppliers(s => s.filter(sup => sup.id !== id));
         toast.success("Supplier deleted");
+    }
+
+    // ********** Ledgers (Customers) CRUD **********
+    function addLedger(ledger) {
+        const newLedger = { ...ledger, id: `led${Date.now()}` };
+        setLedgers(s => [...s, newLedger]);
+        toast.success("Customer added successfully");
+    }
+
+    function editLedger(id, updated) {
+        setLedgers(s => s.map(l => l.id === id ? { ...l, ...updated } : l));
+        toast.success("Customer updated successfully");
+    }
+
+    async function deleteLedger(id) {
+        const confirmed = await dialog.confirm({
+            title: "Delete Customer",
+            message: "Are you sure you want to delete this customer?",
+            type: "danger",
+        });
+        if (!confirmed) return;
+        setLedgers(s => s.filter(l => l.id !== id));
+        toast.success("Customer deleted");
     }
 
     // ********** Products CRUD **********
@@ -271,8 +297,9 @@ export function StoreProvider({ user, children }) {
     }
 
     const value = {
-        products, suppliers, purchases, sales, receipts, payments, settings, setSettings,
+        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, setSettings,
         addSupplier, editSupplier, deleteSupplier,
+        addLedger, editLedger, deleteLedger,
         addOrUpdateProduct, deleteProduct,
         addPurchase, updatePurchase, deletePurchase,
         addSale, updateSale, deleteSale,

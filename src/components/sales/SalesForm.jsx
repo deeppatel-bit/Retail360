@@ -7,7 +7,7 @@ import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function SalesForm({ editMode }) {
-  const { products, addSale, updateSale, sales } = useStore();
+  const { products, addSale, updateSale, sales, ledgers } = useStore();
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -146,12 +146,15 @@ export default function SalesForm({ editMode }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Customer Name</label>
-            <input
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-background text-foreground"
-              placeholder="Enter customer name"
-            />
+            <div className="relative">
+              <SearchableDropdown
+                options={ledgers.map(l => ({ value: l.name, label: l.name }))}
+                value={customerName}
+                onChange={(val) => setCustomerName(val)}
+                placeholder="Select Customer..."
+                allowCustomValue={true}
+              />
+            </div>
           </div>
 
           <div>
