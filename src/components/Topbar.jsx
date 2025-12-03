@@ -1,16 +1,25 @@
 import React from "react";
-import { Search, LogOut } from "lucide-react";
+import { Search, LogOut, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 import ThemeToggle from "./common/ThemeToggle";
 
-export default function Topbar({ search, setSearch, user, settings, onLogout }) {
+export default function Topbar({ search, setSearch, user, settings, onLogout, onToggleSidebar }) {
   const userName = user?.name || user?.ownerName || "Owner";
   const storeName = settings?.storeName || user?.storeName || "My Store";
 
   return (
-    <header className="flex items-center justify-between bg-card/80 backdrop-blur-md p-4 border-b border-border sticky top-0 z-10 transition-all duration-300">
+    <header className="flex items-center justify-between bg-card/80 backdrop-blur-md p-4 border-b border-border sticky top-0 z-10 transition-all duration-300 gap-4">
+      
+      {/* Mobile Menu Toggle */}
+      <button 
+        onClick={onToggleSidebar}
+        className="lg:hidden p-2 text-muted-foreground hover:text-primary transition-colors"
+      >
+        <Menu size={24} />
+      </button>
+
       <motion.div 
-        className="relative w-96 group"
+        className="relative flex-1 max-w-md group"
         whileFocus={{ scale: 1.02 }}
       >
         <motion.div
@@ -23,7 +32,7 @@ export default function Topbar({ search, setSearch, user, settings, onLogout }) 
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search product, barcode, or transaction..."
+          placeholder="Search..."
           className="pl-10 pr-4 py-2 border border-input focus:border-primary focus:ring-2 focus:ring-primary/20
           rounded-full w-full transition-all duration-200 ease-in-out text-sm outline-none bg-muted/50 focus:bg-background shadow-sm text-foreground focus:shadow-md focus:scale-[1.01]"
         />

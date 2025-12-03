@@ -79,7 +79,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
           </label>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label>
               <div className="text-sm font-medium text-foreground">Category</div>
               <input
@@ -101,7 +101,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             </label>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <label>
               <div className="text-sm text-foreground">Stock</div>
               <input

@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Package, Truck, ShoppingCart, DollarSign, BarChart2, Settings, BookOpen, CreditCard } from "lucide-react";
+import { Home, Package, Truck, ShoppingCart, DollarSign, BarChart2, Settings, BookOpen, CreditCard, X } from "lucide-react";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
@@ -17,11 +17,16 @@ const items = [
 
 import { motion } from "framer-motion";
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   return (
-
-    <aside className="w-64 bg-card/90 backdrop-blur-md border-r border-border flex flex-col shadow-lg z-20">
-      <div className="p-6 border-b border-border bg-gradient-to-br from-card to-accent/10">
+    <aside 
+      className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-card/90 backdrop-blur-md border-r border-border flex flex-col shadow-lg transition-transform duration-300 ease-in-out
+        lg:static lg:translate-x-0
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+      `}
+    >
+      <div className="p-6 border-b border-border bg-gradient-to-br from-card to-accent/10 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold text-primary tracking-tight flex items-center gap-2">
           <motion.div
             initial={{ rotate: -10 }}
@@ -33,6 +38,11 @@ export default function Sidebar() {
           </motion.div>
           Retail<span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">360</span>
         </h1>
+        
+        {/* Mobile Close Button */}
+        <button onClick={onClose} className="lg:hidden text-muted-foreground hover:text-destructive transition-colors">
+          <X size={24} />
+        </button>
       </div>
 
       <nav className="p-4 flex-grow">
