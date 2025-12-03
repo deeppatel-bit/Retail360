@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Search, Edit, Trash2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Phone, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
@@ -158,12 +158,7 @@ export default function LedgerPage() {
                                     </div>
                                 )}
 
-                                {ledger.email && (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                        <Mail size={14} />
-                                        {ledger.email}
-                                    </div>
-                                )}
+
 
                                 {ledger.address && (
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground/80 mt-2">
@@ -258,9 +253,7 @@ function LedgerForm({ initial, onSave, onCancel }) {
         initial || {
             name: "",
             contact: "",
-            email: "",
             address: "",
-            gst: "",
         }
     );
 
@@ -308,17 +301,7 @@ function LedgerForm({ initial, onSave, onCancel }) {
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            value={form.email}
-                            onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                        />
-                    </div>
+
 
                     <div>
                         <label className="block text-sm font-medium text-foreground mb-1">
@@ -332,17 +315,7 @@ function LedgerForm({ initial, onSave, onCancel }) {
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                            GST Number
-                        </label>
-                        <input
-                            type="text"
-                            value={form.gst}
-                            onChange={(e) => setForm({ ...form, gst: e.target.value })}
-                            className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                        />
-                    </div>
+
 
                     <div className="flex gap-3 pt-4">
                         <button
