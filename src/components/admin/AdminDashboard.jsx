@@ -5,7 +5,7 @@ import StoreList from "./StoreList";
 import StoreForm from "./StoreForm";
 import { useToast } from "../../context/ToastContext";
 import { useDialog } from "../../context/DialogContext";
-import api from "../../utils/api"; // API ફાઈલ ઈમ્પોર્ટ કરી em j kr j 
+import api from "../../utils/api"; // API ફાઈલ ઈમ્પોર્ટ કરી em j kr j bhale
 
 
 export default function AdminDashboard({ user, onLogout }) {
