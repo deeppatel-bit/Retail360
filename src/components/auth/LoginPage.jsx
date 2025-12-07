@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { Store, Lock, User, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-
-// Correct Imports assuming this file is in src/components/auth/
 import { useToast } from "../../context/ToastContext"; 
-import api from "../../utils/api"; 
+
+// 👇 Note: Have apne direct fetch vaprisu jethi URL no issue na aave
+// import api from "../../utils/api"; 
 
 export default function LoginPage({ onLogin }) {
     const [storeId, setStoreId] = useState("");
@@ -13,8 +13,10 @@ export default function LoginPage({ onLogin }) {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-
     const toast = useToast();
+
+    // 👇 TAMARI SACHI BACKEND URL
+    const API_URL = "https://smart-store-backend.onrender.com/api/auth/store-login";
 
     async function handleSubmit(e) {
         e.preventDefault();
@@ -22,32 +24,40 @@ export default function LoginPage({ onLogin }) {
         setLoading(true);
 
         try {
-            // API Call using axios instance
-            // આ લાઈન સીધી સર્વર ના /api/auth/store-login પર જશે
-            const res = await api.post("/auth/store-login", { 
-                storeId, 
-                password 
+            // 1. Direct Fetch Call (API Utility vagar)
+            const response = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ storeId, password })
             });
 
-            const userData = res.data;
+            const userData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(userData.error || userData.message || "Login failed");
+            }
             
-            // Store token & user data locally for persistence
+            // ✅ MAIN FIX: Token ne alag thi save karo jethi StoreContext ne male
+            localStorage.setItem("token", userData.token); 
+            
+            // User data pan save karo (optional)
             localStorage.setItem("smartstore_user", JSON.stringify(userData));
 
-            // Notify parent component (App.js)
+            // Notify parent
             onLogin({
-                storeId: userData.storeId,
-                name: userData.name || userData.storeName,
+                storeId: userData.store.storeId,
+                name: userData.store.storeName,
                 role: "store_owner",
                 token: userData.token,
-                ...userData
+                ...userData.store
             });
 
-            toast.success(`Welcome back, ${userData.ownerName || "Store Owner"}!`);
+            toast.success(`Welcome back!`);
+            navigate("/products"); // Safalta pachi Products page par jao
 
         } catch (err) {
             console.error("Login Error:", err);
-            const msg = err.response?.data?.error || "Invalid Credentials or Server Error";
+            const msg = err.message || "Invalid Credentials or Server Error";
             setError(msg);
             toast.error(msg);
         } finally {
@@ -88,14 +98,6 @@ export default function LoginPage({ onLogin }) {
 
             {/* Right Side - Login Form */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background relative">
-                <button
-                    onClick={() => navigate('/')}
-                    className="absolute top-8 left-8 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                    <ArrowLeft size={20} />
-                    <span>Back</span>
-                </button>
-
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -109,27 +111,22 @@ export default function LoginPage({ onLogin }) {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {error && (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                className="bg-destructive/10 text-destructive text-sm p-4 rounded-xl border border-destructive/20 flex items-center gap-2"
-                            >
-                                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                            <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-xl border border-destructive/20 flex items-center gap-2">
                                 {error}
-                            </motion.div>
+                            </div>
                         )}
 
                         <div className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1.5">Store ID</label>
                                 <div className="relative group">
-                                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-emerald-600 transition-colors" size={20} />
+                                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                                     <input
                                         type="text"
                                         value={storeId}
                                         onChange={(e) => setStoreId(e.target.value)}
-                                        className="w-full pl-11 pr-4 py-3 border border-input rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all bg-background text-foreground"
-                                        placeholder="e.g. 1234"
+                                        className="w-full pl-11 pr-4 py-3 border border-input rounded-xl outline-none transition-all bg-background text-foreground focus:ring-2 focus:ring-emerald-500/20"
+                                        placeholder="e.g. demo123"
                                         required
                                         disabled={loading}
                                     />
@@ -139,12 +136,12 @@ export default function LoginPage({ onLogin }) {
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
                                 <div className="relative group">
-                                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-emerald-600 transition-colors" size={20} />
+                                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                                     <input
                                         type="password"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full pl-11 pr-4 py-3 border border-input rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all bg-background text-foreground"
+                                        className="w-full pl-11 pr-4 py-3 border border-input rounded-xl outline-none transition-all bg-background text-foreground focus:ring-2 focus:ring-emerald-500/20"
                                         placeholder="••••••••"
                                         required
                                         disabled={loading}
@@ -153,19 +150,17 @@ export default function LoginPage({ onLogin }) {
                             </div>
                         </div>
 
-                        <motion.button
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                        <button
                             type="submit"
                             disabled={loading}
                             className={`w-full text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all ${
                                 loading 
                                 ? "bg-gray-400 cursor-not-allowed" 
-                                : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-500/20"
+                                : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
                             }`}
                         >
                             {loading ? "Signing In..." : "Sign In to Dashboard"}
-                        </motion.button>
+                        </button>
                     </form>
                 </motion.div>
             </div>

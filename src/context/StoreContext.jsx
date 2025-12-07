@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useToast } from "./ToastContext";
 import { useDialog } from "./DialogContext";
-import { readLS, writeLS, nextInvoiceId } from "../utils/storage";
+import { nextInvoiceId } from "../utils/storage"; 
 
 const StoreContext = createContext();
 
@@ -13,291 +13,262 @@ export function StoreProvider({ user, children }) {
     const toast = useToast();
     const dialog = useDialog();
 
-    // Prefix keys with storeId to isolate data
-    const PREFIX = `store_${user.storeId}_`;
+    // ✅ Tamari Sachi Link
+    const API_BASE_URL = "https://smart-store-backend.onrender.com/api"; 
 
-    const LS_PRODUCTS = `${PREFIX}products`;
-    const LS_SUPPLIERS = `${PREFIX}suppliers`;
-    const LS_PURCHASES = `${PREFIX}purchases`;
-    const LS_SALES = `${PREFIX}sales`;
-    const LS_RECEIPTS = `${PREFIX}receipts`;
-    const LS_PAYMENTS = `${PREFIX}payments`;
-    const LS_SETTINGS = `${PREFIX}settings`;
-    const LS_LEDGERS = `${PREFIX}ledgers`;
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem("token");
+        return {
+            "Content-Type": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+        };
+    };
 
-    // data with LocalStorage persistence
-    const [products, setProducts] = useState(() =>
-        readLS(LS_PRODUCTS, [
-            { id: "p1", name: "Rice 1kg", category: "Grocery", unit: "kg", stock: 12, costPrice: 250, sellPrice: 300, reorder: 5 },
-            { id: "p2", name: "Notebook", category: "Stationery", unit: "pcs", stock: 40, costPrice: 20, sellPrice: 35, reorder: 10 },
-            { id: "p3", name: "Toothpaste", category: "Personal Care", unit: "pcs", stock: 6, costPrice: 60, sellPrice: 90, reorder: 5 },
-        ])
-    );
-    const [suppliers, setSuppliers] = useState(() => readLS(LS_SUPPLIERS, []));
-    const [ledgers, setLedgers] = useState(() => readLS(LS_LEDGERS, []));
-    const [purchases, setPurchases] = useState(() => readLS(LS_PURCHASES, []));
-    const [sales, setSales] = useState(() => readLS(LS_SALES, []));
-    const [receipts, setReceipts] = useState(() => readLS(LS_RECEIPTS, []));
-    const [payments, setPayments] = useState(() => readLS(LS_PAYMENTS, []));
-    const [settings, setSettings] = useState(() => readLS(LS_SETTINGS, {
-        storeName: user.storeName || "My Store",
-        address: user.address || "",
-        phone: user.mobile || "",
+    // ********** STATE MANAGEMENT **********
+    const [isAppLoading, setIsAppLoading] = useState(true);
+    const [products, setProducts] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
+    const [ledgers, setLedgers] = useState([]); 
+    const [purchases, setPurchases] = useState([]);
+    const [sales, setSales] = useState([]);
+    const [receipts, setReceipts] = useState([]);
+    const [payments, setPayments] = useState([]);
+    const [settings, setSettings] = useState({
+        storeName: user?.storeName || "",
+        address: user?.address || "",
+        phone: user?.mobile || "",
         gst: ""
-    }));
+    });
 
-    useEffect(() => writeLS(LS_PRODUCTS, products), [products, LS_PRODUCTS]);
-    useEffect(() => writeLS(LS_SUPPLIERS, suppliers), [suppliers, LS_SUPPLIERS]);
-    useEffect(() => writeLS(LS_LEDGERS, ledgers), [ledgers, LS_LEDGERS]);
-    useEffect(() => writeLS(LS_PURCHASES, purchases), [purchases, LS_PURCHASES]);
-    useEffect(() => writeLS(LS_SALES, sales), [sales, LS_SALES]);
-    useEffect(() => writeLS(LS_RECEIPTS, receipts), [receipts, LS_RECEIPTS]);
-    useEffect(() => writeLS(LS_PAYMENTS, payments), [payments, LS_PAYMENTS]);
-    useEffect(() => writeLS(LS_SETTINGS, settings), [settings, LS_SETTINGS]);
+    // ********** 1. DATA FETCHING **********
+    const refreshAllData = useCallback(async () => {
+        try {
+            const headers = getAuthHeaders();
+            
+            // Ledgers ane Settings comment out karyu che te barabar che
+            const [pRes, supRes, purRes, salRes, recRes, payRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/products`, { headers }),
+                fetch(`${API_BASE_URL}/suppliers`, { headers }),
+                fetch(`${API_BASE_URL}/purchases`, { headers }),
+                fetch(`${API_BASE_URL}/sales`, { headers }),
+                fetch(`${API_BASE_URL}/receipts`, { headers }),
+                fetch(`${API_BASE_URL}/payments`, { headers }),
+            ]);
 
-    // ********** Suppliers CRUD **********
-    function addSupplier(supplier) {
-        const newSupplier = { ...supplier, id: `sup${Date.now()}` };
-        setSuppliers(s => [...s, newSupplier]);
-        toast.success("Supplier added successfully");
+            if (pRes.ok) setProducts(await pRes.json());
+            if (supRes.ok) setSuppliers(await supRes.json());
+            if (purRes.ok) setPurchases(await purRes.json());
+            if (salRes.ok) setSales(await salRes.json());
+            if (recRes.ok) setReceipts(await recRes.json());
+            if (payRes.ok) setPayments(await payRes.json());
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setIsAppLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (user) {
+            refreshAllData();
+        }
+    }, [user, refreshAllData]);
+
+    // ********** HELPER: GENERIC API REQUEST **********
+    const apiRequest = async (endpoint, method, body = null) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+                method,
+                headers: getAuthHeaders(),
+                body: body ? JSON.stringify(body) : null,
+            });
+
+            // Pehla response JSON ma convert karo
+            const data = await response.json();
+
+            if (!response.ok) {
+                // 👇 MAIN FIX: Backend "error" key mokle che, "message" nahi.
+                // Aa banne check karse: data.error OR data.message
+                throw new Error(data.error || data.message || "Request failed");
+            }
+            return data;
+        } catch (error) {
+            console.error(`API Error (${method} ${endpoint}):`, error);
+            toast.error(error.message); // Have tamne sacho error message dekhase
+            throw error;
+        }
+    };
+
+    // ********** 2. PRODUCTS CRUD **********
+    async function addOrUpdateProduct(form) {
+        try {
+            if (form.id) {
+                await apiRequest(`products/${form.id}`, "PUT", form);
+                toast.success("Product updated");
+            } else {
+                await apiRequest("products", "POST", form);
+                toast.success("Product added");
+            }
+            refreshAllData(); 
+        } catch (e) {}
     }
 
-    function editSupplier(id, updated) {
-        setSuppliers(s => s.map(sup => sup.id === id ? { ...sup, ...updated } : sup));
-        toast.success("Supplier updated successfully");
+    async function deleteProduct(id) {
+        if (!await dialog.confirm({ title: "Delete Product", type: "danger" })) return;
+        try {
+            await apiRequest(`products/${id}`, "DELETE");
+            toast.success("Product deleted");
+            refreshAllData();
+        } catch (e) {}
+    }
+
+    // ********** 3. SUPPLIERS CRUD **********
+    async function addSupplier(data) {
+        try {
+            await apiRequest("suppliers", "POST", data);
+            toast.success("Supplier added");
+            refreshAllData();
+        } catch (e) {}
+    }
+
+    async function editSupplier(id, data) {
+        try {
+            await apiRequest(`suppliers/${id}`, "PUT", data);
+            toast.success("Supplier updated");
+            refreshAllData();
+        } catch (e) {}
     }
 
     async function deleteSupplier(id) {
-        const confirmed = await dialog.confirm({
-            title: "Delete Supplier",
-            message: "Are you sure you want to delete this supplier?",
-            type: "danger",
-        });
-        if (!confirmed) return;
-        setSuppliers(s => s.filter(sup => sup.id !== id));
-        toast.success("Supplier deleted");
+        if (!await dialog.confirm({ title: "Delete Supplier", type: "danger" })) return;
+        try {
+            await apiRequest(`suppliers/${id}`, "DELETE");
+            toast.success("Supplier deleted");
+            refreshAllData();
+        } catch (e) {}
     }
 
-    // ********** Ledgers (Customers) CRUD **********
-    function addLedger(ledger) {
-        const newLedger = { ...ledger, id: `led${Date.now()}` };
-        setLedgers(s => [...s, newLedger]);
-        toast.success("Customer added successfully");
-    }
+    // ********** 4. CUSTOMERS (Placeholder) **********
+    async function addLedger(data) { toast.error("Customer module not active"); }
+    async function editLedger(id, data) { toast.error("Customer module not active"); }
+    async function deleteLedger(id) { toast.error("Customer module not active"); }
 
-    function editLedger(id, updated) {
-        setLedgers(s => s.map(l => l.id === id ? { ...l, ...updated } : l));
-        toast.success("Customer updated successfully");
-    }
-
-    async function deleteLedger(id) {
-        const confirmed = await dialog.confirm({
-            title: "Delete Customer",
-            message: "Are you sure you want to delete this customer?",
-            type: "danger",
-        });
-        if (!confirmed) return;
-        setLedgers(s => s.filter(l => l.id !== id));
-        toast.success("Customer deleted");
-    }
-
-    // ********** Products CRUD **********
-    function addOrUpdateProduct(form) {
-        if (!form.name) return toast.error("Name required");
-        if (form.id) {
-            setProducts((s) => s.map((p) => (p.id === form.id ? { ...p, ...form } : p)));
-            toast.success("Product updated successfully");
-        } else {
-            setProducts((s) => [...s, { ...form, id: `p${Date.now()}` }]);
-            toast.success("Product added successfully");
-        }
-    }
-    async function deleteProduct(id) {
-        const confirmed = await dialog.confirm({
-            title: "Delete Product",
-            message: "Are you sure you want to delete this product? This action cannot be undone.",
-            type: "danger",
-            confirmText: "Delete",
-        });
-        if (!confirmed) return;
-        setProducts((s) => s.filter((p) => p.id !== id));
-        toast.success("Product deleted");
-    }
-
-    // ********** Purchases **********
-    function addPurchase({ supplierName, billNo, date, lines, taxPercent = 0, discountPercent = 0, notes, ...rest }) {
-        let subtotal = 0;
-        let totalDiscount = 0;
-        let totalTax = 0;
-
-        const linesResolved = lines.map(l => ({
-            ...l,
-            taxPercent: l.taxPercent || 0,
-            discountPercent: l.discountPercent || 0
-        }));
-
-        linesResolved.forEach(l => {
-            const qty = Number(l.qty || 0);
-            const price = Number(l.price || 0);
-            const lineAmount = qty * price;
-            const lineDisc = (lineAmount * Number(l.discountPercent || 0)) / 100;
-            const lineTax = ((lineAmount - lineDisc) * Number(l.taxPercent || 0)) / 100;
-
-            subtotal += lineAmount;
-            totalDiscount += lineDisc;
-            totalTax += lineTax;
-        });
-
-        const total = subtotal - totalDiscount + totalTax;
-
-        const purchase = {
+    // ********** 5. PURCHASES **********
+    async function addPurchase(data) {
+        const payload = {
+            ...data,
             purchaseId: nextInvoiceId(purchases, "PUR"),
-            supplierName,
-            billNo,
-            date: date || new Date().toISOString(),
-            lines: linesResolved,
-            subtotal,
-            discount: totalDiscount,
-            tax: totalTax,
-            total,
-            notes,
-            paymentStatus: rest.paymentStatus || "Unpaid",
-            amountPaid: Number(rest.amountPaid || 0),
-            paymentMode: rest.paymentMode || "Cash",
-            balanceDue: Number(rest.balanceDue || 0),
+            date: data.date || new Date().toISOString(),
         };
-
-        setPurchases((s) => [purchase, ...s]);
-        setProducts((prev) =>
-            prev.map((p) => {
-                const ln = lines.find((l) => l.productId === p.id);
-                if (ln && ln.productId) {
-                    return { ...p, stock: Number(p.stock || 0) + Number(ln.qty || 0) };
-                }
-                return p;
-            })
-        );
+        try {
+            await apiRequest("purchases", "POST", payload);
+            toast.success("Purchase saved successfully");
+            refreshAllData(); 
+        } catch (e) {}
     }
 
-    function updatePurchase(id, payload) {
-        setPurchases((s) => s.map((p) => (p.purchaseId === id ? { ...p, ...payload } : p)));
+    async function updatePurchase(id, data) {
+        try {
+            await apiRequest(`purchases/${id}`, "PUT", data);
+            toast.success("Purchase updated");
+            refreshAllData();
+        } catch (e) {}
     }
 
     async function deletePurchase(id) {
-        const confirmed = await dialog.confirm({
-            title: "Delete Purchase",
-            message: "Are you sure you want to delete this purchase record? Stock will NOT be reverted.",
-            type: "danger",
-        });
-        if (!confirmed) return;
-        setPurchases((s) => s.filter((p) => p.purchaseId !== id));
-        toast.success("Purchase deleted");
+        if (!await dialog.confirm({ title: "Delete Purchase", message: "Stock adjustments may vary based on backend logic.", type: "danger" })) return;
+        try {
+            await apiRequest(`purchases/${id}`, "DELETE");
+            toast.success("Purchase deleted");
+            refreshAllData();
+        } catch (e) {}
     }
 
-    // ********** Sales **********
-    function addSale({ customerName, date, lines, taxPercent = 0, discountPercent = 0, notes, ...rest }) {
-        const linesResolved = lines.map((l) => {
-            const p = products.find((x) => x.id === l.productId);
-            const price = l.price ? Number(l.price) : (p ? p.sellPrice : 0);
-            return { ...l, price, taxPercent: l.taxPercent || 0, discountPercent: l.discountPercent || 0 };
-        });
-
-        let subtotal = 0;
-        let totalDiscount = 0;
-        let totalTax = 0;
-
-        linesResolved.forEach(l => {
-            const qty = Number(l.qty || 0);
-            const price = Number(l.price || 0);
-            const lineAmount = qty * price;
-            const lineDisc = (lineAmount * Number(l.discountPercent || 0)) / 100;
-            const lineTax = ((lineAmount - lineDisc) * Number(l.taxPercent || 0)) / 100;
-
-            subtotal += lineAmount;
-            totalDiscount += lineDisc;
-            totalTax += lineTax;
-        });
-
-        const total = subtotal - totalDiscount + totalTax;
-
-        const sale = {
-            saleId: nextInvoiceId(sales, "SAL"),
-            customerName,
-            date: date || new Date().toISOString(),
-            lines: linesResolved,
-            subtotal,
-            discount: totalDiscount,
-            tax: totalTax,
-            total,
-            notes,
-            paymentStatus: rest.paymentStatus || "Unpaid",
-            amountPaid: Number(rest.amountPaid || 0),
-            paymentMode: rest.paymentMode || "Cash",
-            balanceDue: Number(rest.balanceDue || 0),
-        };
-
-        const insufficient = linesResolved.find((ln) => {
+    // ********** 6. SALES **********
+    async function addSale(data) {
+        const insufficient = data.lines.find((ln) => {
             const p = products.find((x) => x.id === ln.productId);
             return !p || Number(ln.qty) > Number(p.stock);
         });
         if (insufficient) {
-            return toast.error("Not enough stock for some items. Sale aborted.");
+            return toast.error(`Insufficient stock for item: ${insufficient.name || 'Unknown'}`);
         }
 
-        setSales((s) => [sale, ...s]);
-        setProducts((prev) =>
-            prev.map((p) => {
-                const ln = linesResolved.find((l) => l.productId === p.id);
-                if (ln && ln.productId) {
-                    return { ...p, stock: Math.max(0, Number(p.stock || 0) - Number(ln.qty || 0)), soldToday: (p.soldToday || 0) + Number(ln.qty || 0) };
-                }
-                return p;
-            })
-        );
+        const payload = {
+            ...data,
+            saleId: nextInvoiceId(sales, "SAL"), 
+            date: data.date || new Date().toISOString(),
+        };
+
+        try {
+            await apiRequest("sales", "POST", payload);
+            toast.success("Sale completed successfully");
+            refreshAllData();
+        } catch (e) {}
     }
 
-    function updateSale(id, payload) {
-        setSales((s) => s.map((x) => (x.saleId === id ? { ...x, ...payload } : x)));
+    async function updateSale(id, data) {
+        try {
+            await apiRequest(`sales/${id}`, "PUT", data);
+            toast.success("Sale updated");
+            refreshAllData();
+        } catch (e) {}
     }
 
     async function deleteSale(id) {
-        const confirmed = await dialog.confirm({
-            title: "Delete Sale",
-            message: "Are you sure you want to delete this sale? Stock will NOT be reverted.",
-            type: "danger",
-        });
-        if (!confirmed) return;
-        setSales((s) => s.filter((x) => x.saleId !== id));
-        toast.success("Sale deleted");
+        if (!await dialog.confirm({ title: "Delete Sale", message: "This will revert the transaction.", type: "danger" })) return;
+        try {
+            await apiRequest(`sales/${id}`, "DELETE");
+            toast.success("Sale deleted");
+            refreshAllData();
+        } catch (e) {}
     }
 
-    // ********** Finance **********
-    function addReceipt(data) {
-        const newReceipt = { ...data, id: `REC-${Date.now()}` };
-        setReceipts(s => [newReceipt, ...s]);
-        toast.success("Receipt added");
+    // ********** 7. FINANCE **********
+    async function addReceipt(data) {
+        try {
+            await apiRequest("receipts", "POST", { ...data, id: `REC-${Date.now()}` });
+            toast.success("Receipt added");
+            refreshAllData();
+        } catch (e) {}
     }
     async function deleteReceipt(id) {
-        const confirmed = await dialog.confirm({ title: "Delete Receipt", message: "Are you sure?", type: "danger" });
-        if (!confirmed) return;
-        setReceipts(s => s.filter(x => x.id !== id));
-        toast.success("Receipt deleted");
+        if (!await dialog.confirm({ title: "Delete Receipt", type: "danger" })) return;
+        try {
+            await apiRequest(`receipts/${id}`, "DELETE");
+            toast.success("Receipt deleted");
+            refreshAllData();
+        } catch (e) {}
     }
 
-    function addPayment(data) {
-        const newPayment = { ...data, id: `PAY-${Date.now()}` };
-        setPayments(s => [newPayment, ...s]);
-        toast.success("Payment added");
+    async function addPayment(data) {
+        try {
+            await apiRequest("payments", "POST", { ...data, id: `PAY-${Date.now()}` });
+            toast.success("Payment added");
+            refreshAllData();
+        } catch (e) {}
     }
     async function deletePayment(id) {
-        const confirmed = await dialog.confirm({ title: "Delete Payment", message: "Are you sure?", type: "danger" });
-        if (!confirmed) return;
-        setPayments(s => s.filter(x => x.id !== id));
-        toast.success("Payment deleted");
+        if (!await dialog.confirm({ title: "Delete Payment", type: "danger" })) return;
+        try {
+            await apiRequest(`payments/${id}`, "DELETE");
+            toast.success("Payment deleted");
+            refreshAllData();
+        } catch (e) {}
+    }
+
+    // ********** 8. SETTINGS **********
+    async function updateSettings(newSettings) {
+        setSettings(newSettings); 
+        toast.success("Settings saved locally (Backend inactive)");
     }
 
     const value = {
-        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, setSettings,
+        isAppLoading, refreshAllData,
+        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, 
+        setSettings: updateSettings,
+        
         addSupplier, editSupplier, deleteSupplier,
         addLedger, editLedger, deleteLedger,
         addOrUpdateProduct, deleteProduct,
