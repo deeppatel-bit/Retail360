@@ -13,8 +13,7 @@ export function StoreProvider({ user, children }) {
     const toast = useToast();
     const dialog = useDialog();
 
-    // ⚠️ જો લોકલ પર કામ કરતા હોવ તો આ વાપરો: "http://localhost:5000/api"
-    // ⚠️ જો લાઈવ હોય તો આ: "https://smart-store-backend.onrender.com/api"
+    // ✅ LIVE Backend URL
     const API_BASE_URL = "https://smart-store-backend.onrender.com/api"; 
 
     const getAuthHeaders = () => {
@@ -41,12 +40,12 @@ export function StoreProvider({ user, children }) {
         gst: ""
     });
 
-    // ********** 1. DATA FETCHING (CRASH PROOF) **********
+    // ********** 1. DATA FETCHING (SAFE MODE) **********
     const refreshAllData = useCallback(async () => {
         const headers = getAuthHeaders();
 
-        // ✅ SAFE FETCH FUNCTION (આ મહત્વનો સુધારો છે)
-        // આ ફંક્શન ચેક કરશે કે ડેટા લિસ્ટ છે કે નહીં.
+        // ✅ SAFE FETCH FUNCTION (આ એપને ક્રેશ થતા બચાવશે)
+        // જો બેકએન્ડ એરર આપે તો પણ આ ખાલી લિસ્ટ [] રિટર્ન કરશે.
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
@@ -54,27 +53,24 @@ export function StoreProvider({ user, children }) {
                 
                 if (res.ok && contentType && contentType.includes("application/json")) {
                     const data = await res.json();
-                    
-                    // 🛑 CRITICAL FIX: 
-                    // જો ડેટા 'Array' (લિસ્ટ) હોય તો જ રિટર્ન કરો.
-                    // જો તે 'Object' (જેમ કે Error) હોય, તો ખાલી લિસ્ટ [] મોકલો.
+                    // 🛑 Safety Check: જો ડેટા લિસ્ટ (Array) હોય તો જ વાપરો
                     return Array.isArray(data) ? data : []; 
                 }
             } catch (e) {
                 console.warn(`Failed to load ${endpoint}:`, e);
             }
-            return []; // એરર આવે તો ખાલી લિસ્ટ, જેથી એપ ક્રેશ ના થાય
+            return []; // એરર આવે તો ખાલી લિસ્ટ રાખો
         };
 
         try {
-            // બધા ડેટા એકસાથે લાવો (સુરક્ષિત રીતે)
+            // બધા ડેટા એકસાથે લાવો
             const [p, s, pur, sal, rec, pay, cust] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
                 fetchSafe("purchases"),
                 fetchSafe("sales"),
-                fetchSafe("receipts"), // હવે આ ક્રેશ નહીં કરે
-                fetchSafe("payments"), // હવે આ ક્રેશ નહીં કરે
+                fetchSafe("receipts"), // હવે Receipt પેજ પર વ્હાઇટ સ્ક્રીન નહીં આવે
+                fetchSafe("payments"), // હવે Payment પેજ પર વ્હાઇટ સ્ક્રીન નહીં આવે
                 fetchSafe("customers")
             ]);
 
@@ -101,6 +97,7 @@ export function StoreProvider({ user, children }) {
             console.log("Fetching Data for Store:", user.storeId);
             refreshAllData();
         }
+        // ⚠️ આ લાઈન લૂપ રોકવા માટે સૌથી મહત્વની છે
     }, [user?.storeId, refreshAllData]); 
 
     // ********** HELPER: GENERIC API REQUEST **********
@@ -113,7 +110,7 @@ export function StoreProvider({ user, children }) {
             });
 
             const contentType = response.headers.get("content-type");
-            // HTML error (404/500) હેન્ડલ કરો
+            // જો HTML એરર આવે તો પકડી લો
             if (!contentType || !contentType.includes("application/json")) {
                 throw new Error(`Server Error (${response.status}): Feature may not exist.`);
             }
