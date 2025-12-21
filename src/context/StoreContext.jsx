@@ -13,6 +13,8 @@ export function StoreProvider({ user, children }) {
     const toast = useToast();
     const dialog = useDialog();
 
+    // ⚠️ જો લોકલ પર કામ કરતા હોવ તો આ વાપરો: "http://localhost:5000/api"
+    // ⚠️ જો લાઈવ હોય તો આ: "https://smart-store-backend.onrender.com/api"
     const API_BASE_URL = "https://smart-store-backend.onrender.com/api"; 
 
     const getAuthHeaders = () => {
@@ -39,61 +41,68 @@ export function StoreProvider({ user, children }) {
         gst: ""
     });
 
-    // ********** 1. DATA FETCHING (SAFE MODE) **********
+    // ********** 1. DATA FETCHING (CRASH PROOF) **********
     const refreshAllData = useCallback(async () => {
-        // App loading state શરૂ કરો
-        // setIsAppLoading(true); // આને comment રાખ્યું છે જેથી વારંવાર સ્ક્રીન રીફ્રેશ ના થાય
-
         const headers = getAuthHeaders();
 
-        // આ ફંક્શન દરેક ડેટાને અલગથી લાવશે. જો કોઈ એકમાં એરર આવે તો બીજાને અસર નહીં થાય.
+        // ✅ SAFE FETCH FUNCTION (આ મહત્વનો સુધારો છે)
+        // આ ફંક્શન ચેક કરશે કે ડેટા લિસ્ટ છે કે નહીં.
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
-                const type = res.headers.get("content-type");
-                if (res.ok && type && type.includes("application/json")) {
-                    return await res.json();
+                const contentType = res.headers.get("content-type");
+                
+                if (res.ok && contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    
+                    // 🛑 CRITICAL FIX: 
+                    // જો ડેટા 'Array' (લિસ્ટ) હોય તો જ રિટર્ન કરો.
+                    // જો તે 'Object' (જેમ કે Error) હોય, તો ખાલી લિસ્ટ [] મોકલો.
+                    return Array.isArray(data) ? data : []; 
                 }
             } catch (e) {
                 console.warn(`Failed to load ${endpoint}:`, e);
             }
-            return []; // જો એરર આવે તો ખાલી લિસ્ટ આપશે
+            return []; // એરર આવે તો ખાલી લિસ્ટ, જેથી એપ ક્રેશ ના થાય
         };
 
-        // બધા ડેટા એકસાથે લાવો પણ સુરક્ષિત રીતે
-        const [p, s, pur, sal, rec, pay, cust] = await Promise.all([
-            fetchSafe("products"),
-            fetchSafe("suppliers"),
-            fetchSafe("purchases"),
-            fetchSafe("sales"),
-            fetchSafe("receipts"),
-            fetchSafe("payments"),
-            fetchSafe("customers")
-        ]);
+        try {
+            // બધા ડેટા એકસાથે લાવો (સુરક્ષિત રીતે)
+            const [p, s, pur, sal, rec, pay, cust] = await Promise.all([
+                fetchSafe("products"),
+                fetchSafe("suppliers"),
+                fetchSafe("purchases"),
+                fetchSafe("sales"),
+                fetchSafe("receipts"), // હવે આ ક્રેશ નહીં કરે
+                fetchSafe("payments"), // હવે આ ક્રેશ નહીં કરે
+                fetchSafe("customers")
+            ]);
 
-        setProducts(p);
-        setSuppliers(s);
-        setPurchases(pur);
-        setSales(sal);
-        setReceipts(rec);
-        setPayments(pay);
-        setLedgers(cust);
+            // સ્ટેટ અપડેટ કરો
+            setProducts(p);
+            setSuppliers(s);
+            setPurchases(pur);
+            setSales(sal);
+            setReceipts(rec);
+            setPayments(pay);
+            setLedgers(cust);
 
-        setIsAppLoading(false);
+        } catch (error) {
+            console.error("Global Fetch Error:", error);
+        } finally {
+            setIsAppLoading(false);
+        }
     }, []);
 
-  // ********** FIX: Infinite Loop Prevention **********
+    // ********** FIX: Infinite Loop Prevention **********
     useEffect(() => {
         // જો યુઝર હોય અને તેનું Store ID હોય તો જ ડેટા મંગાવો
-        // આનાથી લૂપ અટકશે કારણ કે storeId સ્ટ્રિંગ છે, ઓબ્જેક્ટ નથી.
         if (user && user.storeId) {
             console.log("Fetching Data for Store:", user.storeId);
             refreshAllData();
         }
-    // ⚠️ મહત્વનું: અહીં dependency array માં ફક્ત [user?.storeId] જ હોવું જોઈએ.
-    // ભૂલથી પણ [user] ના લખતા.
-    }, [user?.storeId, refreshAllData]);
-    
+    }, [user?.storeId, refreshAllData]); 
+
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
@@ -103,8 +112,8 @@ export function StoreProvider({ user, children }) {
                 body: body ? JSON.stringify(body) : null,
             });
 
-            // જો સર્વર JSON ના બદલે HTML (Error) આપે તો તેને પકડી લો
             const contentType = response.headers.get("content-type");
+            // HTML error (404/500) હેન્ડલ કરો
             if (!contentType || !contentType.includes("application/json")) {
                 throw new Error(`Server Error (${response.status}): Feature may not exist.`);
             }
@@ -117,7 +126,7 @@ export function StoreProvider({ user, children }) {
             return data;
         } catch (error) {
             console.error(`API Error (${method} ${endpoint}):`, error);
-            toast.error(error.message); // યુઝરને એરર બતાવશે
+            toast.error(error.message);
             throw error;
         }
     };
@@ -304,7 +313,7 @@ export function StoreProvider({ user, children }) {
     // ********** 8. SETTINGS **********
     async function updateSettings(newSettings) {
         setSettings(newSettings); 
-        toast.success("Settings saved locally (Backend inactive)");
+        toast.success("Settings saved locally");
     }
 
     const value = {
