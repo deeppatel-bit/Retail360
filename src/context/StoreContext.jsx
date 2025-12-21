@@ -13,7 +13,6 @@ export function StoreProvider({ user, children }) {
     const toast = useToast();
     const dialog = useDialog();
 
-    // ✅ Tamari Sachi Link
     const API_BASE_URL = "https://smart-store-backend.onrender.com/api"; 
 
     const getAuthHeaders = () => {
@@ -40,40 +39,56 @@ export function StoreProvider({ user, children }) {
         gst: ""
     });
 
-    // ********** 1. DATA FETCHING **********
+    // ********** 1. DATA FETCHING (SAFE MODE) **********
     const refreshAllData = useCallback(async () => {
-        try {
-            const headers = getAuthHeaders();
-            
-            // Ledgers ane Settings comment out karyu che te barabar che
-            const [pRes, supRes, purRes, salRes, recRes, payRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/products`, { headers }),
-                fetch(`${API_BASE_URL}/suppliers`, { headers }),
-                fetch(`${API_BASE_URL}/purchases`, { headers }),
-                fetch(`${API_BASE_URL}/sales`, { headers }),
-                fetch(`${API_BASE_URL}/receipts`, { headers }),
-                fetch(`${API_BASE_URL}/payments`, { headers }),
-            ]);
+        // App loading state શરૂ કરો
+        // setIsAppLoading(true); // આને comment રાખ્યું છે જેથી વારંવાર સ્ક્રીન રીફ્રેશ ના થાય
 
-            if (pRes.ok) setProducts(await pRes.json());
-            if (supRes.ok) setSuppliers(await supRes.json());
-            if (purRes.ok) setPurchases(await purRes.json());
-            if (salRes.ok) setSales(await salRes.json());
-            if (recRes.ok) setReceipts(await recRes.json());
-            if (payRes.ok) setPayments(await payRes.json());
+        const headers = getAuthHeaders();
 
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setIsAppLoading(false);
-        }
+        // આ ફંક્શન દરેક ડેટાને અલગથી લાવશે. જો કોઈ એકમાં એરર આવે તો બીજાને અસર નહીં થાય.
+        const fetchSafe = async (endpoint) => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
+                const type = res.headers.get("content-type");
+                if (res.ok && type && type.includes("application/json")) {
+                    return await res.json();
+                }
+            } catch (e) {
+                console.warn(`Failed to load ${endpoint}:`, e);
+            }
+            return []; // જો એરર આવે તો ખાલી લિસ્ટ આપશે
+        };
+
+        // બધા ડેટા એકસાથે લાવો પણ સુરક્ષિત રીતે
+        const [p, s, pur, sal, rec, pay, cust] = await Promise.all([
+            fetchSafe("products"),
+            fetchSafe("suppliers"),
+            fetchSafe("purchases"),
+            fetchSafe("sales"),
+            fetchSafe("receipts"),
+            fetchSafe("payments"),
+            fetchSafe("customers")
+        ]);
+
+        setProducts(p);
+        setSuppliers(s);
+        setPurchases(pur);
+        setSales(sal);
+        setReceipts(rec);
+        setPayments(pay);
+        setLedgers(cust);
+
+        setIsAppLoading(false);
     }, []);
 
-    useEffect(() => {
-        if (user) {
-            refreshAllData();
-        }
-    }, [user, refreshAllData]);
+   useEffect(() => {
+    // જો યુઝર હોય અને તેનું Store ID હોય તો જ ડેટા લોડ કરો
+    if (user && user.storeId) {
+        refreshAllData();
+    }
+    // user.storeId પર જ નિર્ભર રહો જેથી વારંવાર કોલ ન જાય
+}, [user?.storeId, refreshAllData]);
 
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
@@ -84,18 +99,21 @@ export function StoreProvider({ user, children }) {
                 body: body ? JSON.stringify(body) : null,
             });
 
-            // Pehla response JSON ma convert karo
+            // જો સર્વર JSON ના બદલે HTML (Error) આપે તો તેને પકડી લો
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error(`Server Error (${response.status}): Feature may not exist.`);
+            }
+
             const data = await response.json();
 
             if (!response.ok) {
-                // 👇 MAIN FIX: Backend "error" key mokle che, "message" nahi.
-                // Aa banne check karse: data.error OR data.message
                 throw new Error(data.error || data.message || "Request failed");
             }
             return data;
         } catch (error) {
             console.error(`API Error (${method} ${endpoint}):`, error);
-            toast.error(error.message); // Have tamne sacho error message dekhase
+            toast.error(error.message); // યુઝરને એરર બતાવશે
             throw error;
         }
     };
@@ -149,10 +167,31 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 4. CUSTOMERS (Placeholder) **********
-    async function addLedger(data) { toast.error("Customer module not active"); }
-    async function editLedger(id, data) { toast.error("Customer module not active"); }
-    async function deleteLedger(id) { toast.error("Customer module not active"); }
+    // ********** 4. CUSTOMERS (Ledger) **********
+    async function addLedger(data) {
+        try {
+            await apiRequest("customers", "POST", data);
+            toast.success("Customer added");
+            refreshAllData();
+        } catch (e) {}
+    }
+
+    async function editLedger(id, data) {
+        try {
+            await apiRequest(`customers/${id}`, "PUT", data);
+            toast.success("Customer updated");
+            refreshAllData();
+        } catch (e) {}
+    }
+
+    async function deleteLedger(id) {
+        if (!await dialog.confirm({ title: "Delete Customer", type: "danger" })) return;
+        try {
+            await apiRequest(`customers/${id}`, "DELETE");
+            toast.success("Customer deleted");
+            refreshAllData();
+        } catch (e) {}
+    }
 
     // ********** 5. PURCHASES **********
     async function addPurchase(data) {
