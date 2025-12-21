@@ -82,14 +82,18 @@ export function StoreProvider({ user, children }) {
         setIsAppLoading(false);
     }, []);
 
-   useEffect(() => {
-    // જો યુઝર હોય અને તેનું Store ID હોય તો જ ડેટા લોડ કરો
-    if (user && user.storeId) {
-        refreshAllData();
-    }
-    // user.storeId પર જ નિર્ભર રહો જેથી વારંવાર કોલ ન જાય
-}, [user?.storeId, refreshAllData]);
-
+  // ********** FIX: Infinite Loop Prevention **********
+    useEffect(() => {
+        // જો યુઝર હોય અને તેનું Store ID હોય તો જ ડેટા મંગાવો
+        // આનાથી લૂપ અટકશે કારણ કે storeId સ્ટ્રિંગ છે, ઓબ્જેક્ટ નથી.
+        if (user && user.storeId) {
+            console.log("Fetching Data for Store:", user.storeId);
+            refreshAllData();
+        }
+    // ⚠️ મહત્વનું: અહીં dependency array માં ફક્ત [user?.storeId] જ હોવું જોઈએ.
+    // ભૂલથી પણ [user] ના લખતા.
+    }, [user?.storeId, refreshAllData]);
+    
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
