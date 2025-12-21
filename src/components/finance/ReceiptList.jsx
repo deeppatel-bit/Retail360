@@ -24,12 +24,15 @@ export default function ReceiptList() {
     };
 
     const filteredReceipts = useMemo(() => {
-        let data = receipts.filter((r) => {
+        // 🛑 Safety Check: receipts undefined હોય તો ખાલી array વાપરો
+        let data = (receipts || []).filter((r) => {
+            // ✅ FIX: 'customerName' ને બદલે 'partyName' વાપરો
+            // ✅ FIX: (r.partyName || "") થી safety ઉમેરો
             const matchesSearch =
-                r.customerName.toLowerCase().includes(search.toLowerCase()) ||
-                r.id.toLowerCase().includes(search.toLowerCase());
+                (r.partyName || "").toLowerCase().includes(search.toLowerCase()) ||
+                (r.id || "").toLowerCase().includes(search.toLowerCase());
 
-            const rDate = new Date(r.date).toISOString().slice(0, 10);
+            const rDate = r.date ? new Date(r.date).toISOString().slice(0, 10) : "";
             const matchesDate =
                 (!startDate || rDate >= startDate) &&
                 (!endDate || rDate <= endDate);
@@ -39,12 +42,12 @@ export default function ReceiptList() {
 
         if (sortConfig.key) {
             data.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? -1 : 1;
-                }
-                if (a[sortConfig.key] > b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? 1 : -1;
-                }
+                // Sorting વખતે પણ safety રાખો
+                const valA = a[sortConfig.key] || "";
+                const valB = b[sortConfig.key] || "";
+                
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
         }
@@ -61,7 +64,7 @@ export default function ReceiptList() {
     const columns = [
         { key: 'date', label: 'Date', sortable: true },
         { key: 'id', label: 'Receipt No', sortable: true },
-        { key: 'customerName', label: 'Customer', sortable: true },
+        { key: 'partyName', label: 'Customer', sortable: true }, // ✅ Label Customer રાખો, પણ key partyName
         { key: 'mode', label: 'Mode', sortable: true },
         { key: 'amount', label: 'Amount', sortable: true },
     ];
@@ -109,21 +112,23 @@ export default function ReceiptList() {
                     <table className="w-full text-left">
                         <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
                         <tbody className="divide-y divide-border">
-                            {paginatedReceipts.map((r) => (
-                                <tr key={r.id} className="hover:bg-accent/50 transition-colors">
-                                    <td className="p-4 text-muted-foreground">{new Date(r.date).toLocaleDateString()}</td>
-                                    <td className="p-4 font-medium text-muted-foreground text-sm">{r.id}</td>
-                                    <td className="p-4 font-medium text-foreground">{r.customerName}</td>
-                                    <td className="p-4 text-muted-foreground">{r.mode}</td>
-                                    <td className="p-4 font-bold text-green-600 dark:text-green-400">+ ₹ {Number(r.amount).toFixed(2)}</td>
-                                    <td className="p-4 text-right">
-                                        <button onClick={() => deleteReceipt(r.id)} className="text-destructive hover:text-destructive/80 p-2 hover:bg-destructive/10 rounded-full transition-colors">
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {!paginatedReceipts.length && (
+                            {paginatedReceipts.length > 0 ? (
+                                paginatedReceipts.map((r) => (
+                                    <tr key={r.id || Math.random()} className="hover:bg-accent/50 transition-colors">
+                                        <td className="p-4 text-muted-foreground">{r.date ? new Date(r.date).toLocaleDateString() : "-"}</td>
+                                        <td className="p-4 font-medium text-muted-foreground text-sm">{r.id}</td>
+                                        {/* ✅ FIX: Display partyName instead of customerName */}
+                                        <td className="p-4 font-medium text-foreground">{r.partyName || "Unknown"}</td>
+                                        <td className="p-4 text-muted-foreground">{r.mode}</td>
+                                        <td className="p-4 font-bold text-green-600 dark:text-green-400">+ ₹ {Number(r.amount || 0).toFixed(2)}</td>
+                                        <td className="p-4 text-right">
+                                            <button onClick={() => deleteReceipt(r.id)} className="text-destructive hover:text-destructive/80 p-2 hover:bg-destructive/10 rounded-full transition-colors">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
                                 <tr>
                                     <td colSpan="6" className="p-8 text-center text-muted-foreground">
                                         {search ? "No matching receipts found." : "No receipts found."}
@@ -135,7 +140,7 @@ export default function ReceiptList() {
                 </div>
                 <PaginationControls
                     currentPage={currentPage}
-                    totalPages={totalPages}
+                    totalPages={totalPages > 0 ? totalPages : 1}
                     onPageChange={setCurrentPage}
                 />
             </div>

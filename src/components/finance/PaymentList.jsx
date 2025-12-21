@@ -24,12 +24,14 @@ export default function PaymentList() {
     };
 
     const filteredPayments = useMemo(() => {
-        let data = payments.filter((p) => {
+        // 🛑 Safety Check
+        let data = (payments || []).filter((p) => {
+            // ✅ FIX: 'supplierName' -> 'partyName'
             const matchesSearch =
-                p.supplierName.toLowerCase().includes(search.toLowerCase()) ||
-                p.id.toLowerCase().includes(search.toLowerCase());
+                (p.partyName || "").toLowerCase().includes(search.toLowerCase()) ||
+                (p.id || "").toLowerCase().includes(search.toLowerCase());
 
-            const pDate = new Date(p.date).toISOString().slice(0, 10);
+            const pDate = p.date ? new Date(p.date).toISOString().slice(0, 10) : "";
             const matchesDate =
                 (!startDate || pDate >= startDate) &&
                 (!endDate || pDate <= endDate);
@@ -39,12 +41,10 @@ export default function PaymentList() {
 
         if (sortConfig.key) {
             data.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? -1 : 1;
-                }
-                if (a[sortConfig.key] > b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? 1 : -1;
-                }
+                const valA = a[sortConfig.key] || "";
+                const valB = b[sortConfig.key] || "";
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
         }
@@ -61,7 +61,7 @@ export default function PaymentList() {
     const columns = [
         { key: 'date', label: 'Date', sortable: true },
         { key: 'id', label: 'Payment No', sortable: true },
-        { key: 'supplierName', label: 'Supplier', sortable: true },
+        { key: 'partyName', label: 'Supplier', sortable: true }, // ✅ key partyName
         { key: 'mode', label: 'Mode', sortable: true },
         { key: 'amount', label: 'Amount', sortable: true },
     ];
@@ -109,21 +109,23 @@ export default function PaymentList() {
                     <table className="w-full text-left">
                         <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
                         <tbody className="divide-y divide-border">
-                            {paginatedPayments.map((p) => (
-                                <tr key={p.id} className="hover:bg-accent/50 transition-colors">
-                                    <td className="p-4 text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
-                                    <td className="p-4 font-medium text-muted-foreground text-sm">{p.id}</td>
-                                    <td className="p-4 font-medium text-foreground">{p.supplierName}</td>
-                                    <td className="p-4 text-muted-foreground">{p.mode}</td>
-                                    <td className="p-4 font-bold text-destructive">- ₹ {Number(p.amount).toFixed(2)}</td>
-                                    <td className="p-4 text-right">
-                                        <button onClick={() => deletePayment(p.id)} className="text-destructive hover:text-destructive/80 p-2 hover:bg-destructive/10 rounded-full transition-colors">
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {!paginatedPayments.length && (
+                            {paginatedPayments.length > 0 ? (
+                                paginatedPayments.map((p) => (
+                                    <tr key={p.id || Math.random()} className="hover:bg-accent/50 transition-colors">
+                                        <td className="p-4 text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : "-"}</td>
+                                        <td className="p-4 font-medium text-muted-foreground text-sm">{p.id}</td>
+                                        {/* ✅ FIX: partyName */}
+                                        <td className="p-4 font-medium text-foreground">{p.partyName || "Unknown"}</td>
+                                        <td className="p-4 text-muted-foreground">{p.mode}</td>
+                                        <td className="p-4 font-bold text-destructive">- ₹ {Number(p.amount || 0).toFixed(2)}</td>
+                                        <td className="p-4 text-right">
+                                            <button onClick={() => deletePayment(p.id)} className="text-destructive hover:text-destructive/80 p-2 hover:bg-destructive/10 rounded-full transition-colors">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
                                 <tr>
                                     <td colSpan="6" className="p-8 text-center text-muted-foreground">
                                         {search ? "No matching payments found." : "No payments found."}
@@ -135,7 +137,7 @@ export default function PaymentList() {
                 </div>
                 <PaginationControls
                     currentPage={currentPage}
-                    totalPages={totalPages}
+                    totalPages={totalPages > 0 ? totalPages : 1}
                     onPageChange={setCurrentPage}
                 />
             </div>
