@@ -30,7 +30,6 @@ export default function SalesList() {
   const [statusFilter, setStatusFilter] = useState("All");
 
   const filteredSales = useMemo(() => {
-    // 🛑 Safety Check
     const dataList = Array.isArray(sales) ? sales : [];
 
     let data = dataList.filter((s) => {
@@ -96,10 +95,7 @@ export default function SalesList() {
 
       <div className="bg-card p-4 rounded-xl shadow-sm border border-border space-y-4">
         <div className="relative w-full">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            size={18}
-          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <input
             type="text"
             placeholder="Search customer or ID..."
@@ -114,10 +110,7 @@ export default function SalesList() {
 
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex items-center gap-2 flex-1">
-            <Calendar
-              className="text-muted-foreground flex-shrink-0"
-              size={18}
-            />
+            <Calendar className="text-muted-foreground flex-shrink-0" size={18} />
             <input
               type="date"
               value={startDate}
@@ -127,9 +120,7 @@ export default function SalesList() {
               }}
               className="flex-1 px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-foreground bg-background text-sm"
             />
-            <span className="text-muted-foreground font-medium flex-shrink-0">
-              to
-            </span>
+            <span className="text-muted-foreground font-medium flex-shrink-0">to</span>
             <input
               type="date"
               value={endDate}
@@ -161,15 +152,11 @@ export default function SalesList() {
       <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <TableHeader
-              columns={columns}
-              sortConfig={sortConfig}
-              onSort={handleSort}
-            />
+            <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedSales.map((s) => (
                 <tr
-                  // ✅ FIX: Use 'id' (ObjectId) for key if possible, else saleId
+                  // ✅ FIX: Use 'id' (from backend virtual) or fallback to saleId to prevent key error
                   key={s.id || s.saleId}
                   className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-primary"
                 >
@@ -194,9 +181,7 @@ export default function SalesList() {
                     ₹ {Number(s.amountPaid || 0).toFixed(2)}
                   </td>
                   <td className="p-4 text-destructive font-medium">
-                    {s.balanceDue > 0
-                      ? `₹ ${Number(s.balanceDue).toFixed(2)}`
-                      : "-"}
+                    {s.balanceDue > 0 ? `₹ ${Number(s.balanceDue).toFixed(2)}` : "-"}
                   </td>
                   <td className="p-4">
                     <span
@@ -221,7 +206,6 @@ export default function SalesList() {
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-3">
-                    {/* Note: Edit link might use saleId or id depending on your router setup */}
                     <Link
                       to={`/sales/edit/${s.saleId}`}
                       className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm"
@@ -229,7 +213,7 @@ export default function SalesList() {
                       Edit
                     </Link>
                     <button
-                      // ✅ FIX: Here is the change! Pass 's.id' (MongoDB ID) instead of 's.saleId'
+                      // ✅ FIX: અહીં ખાસ s.id વાપરો (જે હવે Sale.js માંથી આવશે)
                       onClick={() => deleteSale(s.id)}
                       className="text-destructive hover:text-destructive/80 font-medium text-sm"
                     >
@@ -240,16 +224,11 @@ export default function SalesList() {
               ))}
               {!paginatedSales.length && (
                 <tr>
-                  <td
-                    colSpan="9"
-                    className="p-12 text-center text-muted-foreground"
-                  >
+                  <td colSpan="9" className="p-12 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-3">
                       <PackageX className="w-16 h-16 opacity-30" />
                       <p className="text-lg font-medium">
-                        {search
-                          ? "No matching sales found."
-                          : "No sales recorded yet."}
+                        {search ? "No matching sales found." : "No sales recorded yet."}
                       </p>
                       {!search && (
                         <Link
