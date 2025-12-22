@@ -24,14 +24,17 @@ export default function ReceiptList() {
     };
 
     const filteredReceipts = useMemo(() => {
-        // 🛑 Safety Check: receipts undefined હોય તો ખાલી array વાપરો
-        let data = (receipts || []).filter((r) => {
-            // ✅ FIX: 'customerName' ને બદલે 'partyName' વાપરો
-            // ✅ FIX: (r.partyName || "") થી safety ઉમેરો
-            const matchesSearch =
-                (r.partyName || "").toLowerCase().includes(search.toLowerCase()) ||
-                (r.id || "").toLowerCase().includes(search.toLowerCase());
+        // 🛑 Safety Check: જો receipts undefined હોય તો ખાલી array લો
+        const list = Array.isArray(receipts) ? receipts : [];
 
+        let data = list.filter((r) => {
+            // ✅ FIX: 'customerName' ને બદલે 'partyName' વાપર્યું
+            // ✅ FIX: (r.partyName || "") લખ્યું જેથી undefined પર crash ન થાય
+            const nameMatch = (r.partyName || "").toLowerCase().includes(search.toLowerCase());
+            const idMatch = (r.id || "").toLowerCase().includes(search.toLowerCase());
+            const matchesSearch = nameMatch || idMatch;
+
+            // Date filtering safety
             const rDate = r.date ? new Date(r.date).toISOString().slice(0, 10) : "";
             const matchesDate =
                 (!startDate || rDate >= startDate) &&
@@ -64,7 +67,8 @@ export default function ReceiptList() {
     const columns = [
         { key: 'date', label: 'Date', sortable: true },
         { key: 'id', label: 'Receipt No', sortable: true },
-        { key: 'partyName', label: 'Customer', sortable: true }, // ✅ Label Customer રાખો, પણ key partyName
+        // ✅ FIX: અહીં key 'partyName' કરી દીધી
+        { key: 'partyName', label: 'Customer', sortable: true }, 
         { key: 'mode', label: 'Mode', sortable: true },
         { key: 'amount', label: 'Amount', sortable: true },
     ];
@@ -117,7 +121,7 @@ export default function ReceiptList() {
                                     <tr key={r.id || Math.random()} className="hover:bg-accent/50 transition-colors">
                                         <td className="p-4 text-muted-foreground">{r.date ? new Date(r.date).toLocaleDateString() : "-"}</td>
                                         <td className="p-4 font-medium text-muted-foreground text-sm">{r.id}</td>
-                                        {/* ✅ FIX: Display partyName instead of customerName */}
+                                        {/* ✅ FIX: અહીં partyName વાપર્યું */}
                                         <td className="p-4 font-medium text-foreground">{r.partyName || "Unknown"}</td>
                                         <td className="p-4 text-muted-foreground">{r.mode}</td>
                                         <td className="p-4 font-bold text-green-600 dark:text-green-400">+ ₹ {Number(r.amount || 0).toFixed(2)}</td>
