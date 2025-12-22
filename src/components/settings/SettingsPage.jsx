@@ -1,171 +1,215 @@
-import React, { useState } from "react";
-import { Save, User, Database } from "lucide-react";
-import { motion } from "framer-motion";
-import { useToast } from "../../context/ToastContext";
-import { useDialog } from "../../context/DialogContext";
-
+import React, { useState, useEffect } from "react";
+import { Save, Store, User, MapPin, Phone, FileText } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function SettingsPage() {
-  const { settings, updateSettings } = useStore();
-  const [activeTab, setActiveTab] = useState("profile");
-  const toast = useToast();
-  const dialog = useDialog();
+    // 1. setSettings ને અહીં destructure કરો (આ સૌથી મહત્વનું છે)
+    const { settings, setSettings, isAppLoading } = useStore();
+    const toast = useToast();
+    const [loading, setLoading] = useState(false);
 
-  // Profile Settings State
-  const [storeName, setStoreName] = useState(settings?.storeName || "");
-  const [address, setAddress] = useState(settings?.address || "");
-  const [phone, setPhone] = useState(settings?.phone || "");
-  const [gst, setGst] = useState(settings?.gst || "");
-
-  function handleSaveProfile() {
-    updateSettings({
-      ...settings,
-      storeName,
-      address,
-      phone,
-      gst,
-    });
-    toast.success("Store profile updated successfully!");
-  }
-
-  async function handleResetData() {
-    const confirmed = await dialog.confirm({
-      title: "CRITICAL WARNING: Reset Data",
-      message: "This will DELETE ALL sales, purchases, products, and financial data. This action CANNOT be undone. Are you sure?",
-      type: "danger",
-      confirmText: "DELETE EVERYTHING",
+    // Form State
+    const [formData, setFormData] = useState({
+        storeName: "",
+        ownerName: "",
+        mobile: "",
+        email: "",
+        address: "",
+        gst: ""
     });
 
-    if (confirmed) {
-      // Since we can't easily do a custom prompt with the current dialog, we'll skip the double confirmation or implement a simple one.
-      // For now, let's trust the scary modal.
-      localStorage.clear();
-      toast.success("All data has been reset. Reloading...");
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    }
-  }
+    // 2. જવો ડેટા લોડ થાય એટલે ફોર્મ ભરી દો
+    useEffect(() => {
+        if (settings) {
+            setFormData({
+                storeName: settings.storeName || "",
+                ownerName: settings.ownerName || "",
+                mobile: settings.phone || settings.mobile || "", // બન્ને ફિલ્ડ ચેક કરો
+                email: settings.email || "",
+                address: settings.address || "",
+                gst: settings.gst || ""
+            });
+        }
+    }, [settings]);
 
-  const tabs = [
-    { id: "profile", label: "Profile", icon: User },
-    { id: "data", label: "Data Management", icon: Database },
-  ];
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
 
-  return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-foreground">Settings</h2>
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
 
-      <div className="flex gap-4 border-b border-border">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors relative ${isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                }`}
-            >
-              <Icon size={18} />
-              {tab.label}
-              {isActive && (
-                <motion.div
-                  layoutId="activeTabBorder"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
+        try {
+            // અહીં તમારી API કોલ આવશે (ઉદાહરણ તરીકે)
+            // જો તમારી પાસે અલગ API function હોય તો તે વાપરો, નહીંતર setSettings ડાયરેક્ટ કામ કરશે 
+            // કારણ કે StoreContext માં setSettings ફંક્શન બેકએન્ડ કોલ હેન્ડલ કરતું હોય તો.
+            
+            // જો setSettings માત્ર લોકલ અપડેટ કરતું હોય, તો પહેલા API કોલ કરો:
+            const token = localStorage.getItem("token");
+            const response = await fetch("https://smart-store-backend.onrender.com/api/stores/profile", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
 
-      <div className="bg-card p-6 rounded-xl shadow-sm border border-border min-h-[400px]">
-        {activeTab === "profile" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-lg">
-            <h3 className="text-xl font-semibold text-foreground mb-4">Store Profile</h3>
+            const data = await response.json();
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Store Name</label>
-              <input
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
-                className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                placeholder="My Awesome Store"
-              />
+            if (!response.ok) {
+                throw new Error(data.error || "Failed to update settings");
+            }
+
+            // 3. ✅ GLOBAL STATE UPDATE (આનાથી Topbar માં નામ તરત બદલાશે)
+            // આપણે backend રિસ્પોન્સમાંથી અથવા formData માંથી નવો ડેટા સેટ કરીએ છીએ
+            setSettings({
+                ...settings, // જૂનો ડેટા (જેમ કે id, વગેરે) જાળવી રાખો
+                storeName: formData.storeName,
+                ownerName: formData.ownerName,
+                mobile: formData.mobile,
+                email: formData.email,
+                address: formData.address,
+                gst: formData.gst
+            });
+
+            toast.success("Settings updated successfully!");
+        } catch (error) {
+            console.error("Settings Update Error:", error);
+            toast.error(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (isAppLoading) return <div className="p-8 text-center">Loading settings...</div>;
+
+    return (
+        <div className="max-w-4xl mx-auto space-y-6">
+            <h2 className="text-2xl font-bold text-foreground">Store Settings</h2>
+
+            <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+                <div className="p-6 border-b border-border bg-muted/30">
+                    <div className="flex items-center gap-4">
+                        <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                            <Store size={32} />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold text-foreground">Store Profile</h3>
+                            <p className="text-sm text-muted-foreground">Manage your business details and preferences</p>
+                        </div>
+                    </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Store Name */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <Store size={16} /> Store Name
+                        </label>
+                        <input
+                            type="text"
+                            name="storeName"
+                            value={formData.storeName}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                            placeholder="Enter store name"
+                            required
+                        />
+                    </div>
+
+                    {/* Owner Name */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <User size={16} /> Owner Name
+                        </label>
+                        <input
+                            type="text"
+                            name="ownerName"
+                            value={formData.ownerName}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                            placeholder="Enter owner name"
+                            required
+                        />
+                    </div>
+
+                    {/* Mobile */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <Phone size={16} /> Mobile Number
+                        </label>
+                        <input
+                            type="tel"
+                            name="mobile"
+                            value={formData.mobile}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                            placeholder="Enter mobile number"
+                            required
+                        />
+                    </div>
+
+                    {/* Email (Read Only often) */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <FileText size={16} /> Email Address
+                        </label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                            placeholder="Enter email address"
+                        />
+                    </div>
+
+                    {/* Address */}
+                    <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <MapPin size={16} /> Address
+                        </label>
+                        <textarea
+                            name="address"
+                            value={formData.address}
+                            onChange={handleChange}
+                            rows="3"
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground resize-none"
+                            placeholder="Enter store address"
+                        />
+                    </div>
+
+                    {/* GST Number */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <FileText size={16} /> GST Number (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            name="gst"
+                            value={formData.gst}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                            placeholder="Enter GST number"
+                        />
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="md:col-span-2 flex justify-end pt-4">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                        >
+                            <Save size={18} />
+                            {loading ? "Saving..." : "Save Changes"}
+                        </button>
+                    </div>
+                </form>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Address</label>
-              <textarea
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none h-24 resize-none bg-background text-foreground"
-                placeholder="Store address..."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Phone Number</label>
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                  placeholder="+91 98765 43210"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">GSTIN / Tax ID</label>
-                <input
-                  value={gst}
-                  onChange={(e) => setGst(e.target.value)}
-                  className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                  placeholder="22AAAAA0000A1Z5"
-                />
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={handleSaveProfile}
-                className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-sm"
-              >
-                <Save size={18} /> Save Profile
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {activeTab === "data" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-lg">
-            <h3 className="text-xl font-semibold text-destructive mb-4">Danger Zone</h3>
-
-            <div className="bg-destructive/10 border border-destructive/20 p-6 rounded-xl">
-              <h4 className="font-bold text-destructive mb-2">Reset Application Data</h4>
-              <div className="text-sm text-destructive/80 mb-6 leading-relaxed">
-                This action will permanently delete all your data including:
-                <ul className="list-disc list-inside mt-2 ml-2">
-                  <li>All Products and Stock</li>
-                  <li>All Sales and Purchase History</li>
-                  <li>All Financial Records (Receipts/Payments)</li>
-                  <li>Store Settings and Profiles</li>
-                </ul>
-                <br />
-                <strong>This action cannot be undone.</strong>
-              </div>
-
-              <button
-                onClick={handleResetData}
-                className="w-full px-4 py-3 bg-card border-2 border-destructive text-destructive hover:bg-destructive/10 rounded-lg font-bold transition-colors"
-              >
-                Reset All Data
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </div>
-    </div>
-  );
+        </div>
+    );
 }
