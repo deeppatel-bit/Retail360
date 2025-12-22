@@ -26,12 +26,15 @@ export default function PurchaseList() {
   };
 
   const filteredPurchases = useMemo(() => {
-    let data = purchases.filter((p) => {
+    // Safety check
+    const list = Array.isArray(purchases) ? purchases : [];
+
+    let data = list.filter((p) => {
       const matchesSearch =
-        p.supplierName.toLowerCase().includes(search.toLowerCase()) ||
+        (p.supplierName || "").toLowerCase().includes(search.toLowerCase()) ||
         (p.billNo || "").toLowerCase().includes(search.toLowerCase());
 
-      const pDate = new Date(p.date).toISOString().slice(0, 10);
+      const pDate = p.date ? new Date(p.date).toISOString().slice(0, 10) : "";
       const matchesDate =
         (!startDate || pDate >= startDate) &&
         (!endDate || pDate <= endDate);
@@ -45,12 +48,10 @@ export default function PurchaseList() {
 
     if (sortConfig.key) {
       data.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
+        const valA = a[sortConfig.key] || "";
+        const valB = b[sortConfig.key] || "";
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
@@ -88,7 +89,6 @@ export default function PurchaseList() {
       </div>
 
       <div className="bg-card p-4 rounded-xl shadow-sm border border-border space-y-4">
-        {/* Search Bar */}
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <input
@@ -100,7 +100,6 @@ export default function PurchaseList() {
           />
         </div>
 
-        {/* Date Range and Status Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex items-center gap-2 flex-1">
             <Calendar className="text-muted-foreground flex-shrink-0" size={18} />
@@ -139,16 +138,20 @@ export default function PurchaseList() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedPurchases.map((p) => (
-                <tr key={p.purchaseId} className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-emerald-600">
-                  <td className="p-4 text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
+                <tr 
+                  // ✅ FIX: Use 'id' (virtual) or fallback to purchaseId
+                  key={p.id || p.purchaseId} 
+                  className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-emerald-600"
+                >
+                  <td className="p-4 text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : "-"}</td>
                   <td className="p-4 font-medium text-foreground">{p.supplierName}</td>
                   <td className="p-4 text-muted-foreground">{p.billNo || "-"}</td>
                   <td className="p-4 text-center">
                     <span className="bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs font-medium">
-                      {p.lines.length}
+                      {p.lines ? p.lines.length : 0}
                     </span>
                   </td>
-                  <td className="p-4 font-bold text-lg text-foreground">₹ {Number(p.total).toFixed(2)}</td>
+                  <td className="p-4 font-bold text-lg text-foreground">₹ {Number(p.total || 0).toFixed(2)}</td>
                   <td className="p-4 text-muted-foreground">₹ {Number(p.amountPaid || 0).toFixed(2)}</td>
                   <td className="p-4 text-destructive font-medium">
                     {p.balanceDue > 0 ? `₹ ${Number(p.balanceDue).toFixed(2)}` : "-"}
@@ -167,7 +170,13 @@ export default function PurchaseList() {
                   </td>
                   <td className="p-4 text-right space-x-3">
                     <Link to={`/purchase/edit/${p.purchaseId}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm">Edit</Link>
-                    <button onClick={() => deletePurchase(p.purchaseId)} className="text-destructive hover:text-destructive/80 font-medium text-sm">Delete</button>
+                    <button 
+                      // ✅ FIX: અહીં p.id વાપરવું ફરજિયાત છે
+                      onClick={() => deletePurchase(p.id)} 
+                      className="text-destructive hover:text-destructive/80 font-medium text-sm"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
