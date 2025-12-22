@@ -30,12 +30,15 @@ export default function SalesList() {
   const [statusFilter, setStatusFilter] = useState("All");
 
   const filteredSales = useMemo(() => {
-    let data = sales.filter((s) => {
-      const matchesSearch =
-        s.customerName.toLowerCase().includes(search.toLowerCase()) ||
-        s.saleId.toLowerCase().includes(search.toLowerCase());
+    // 🛑 Safety Check
+    const dataList = Array.isArray(sales) ? sales : [];
 
-      const sDate = new Date(s.date).toISOString().slice(0, 10);
+    let data = dataList.filter((s) => {
+      const matchesSearch =
+        (s.customerName || "").toLowerCase().includes(search.toLowerCase()) ||
+        (s.saleId || "").toLowerCase().includes(search.toLowerCase());
+
+      const sDate = s.date ? new Date(s.date).toISOString().slice(0, 10) : "";
       const matchesDate =
         (!startDate || sDate >= startDate) && (!endDate || sDate <= endDate);
 
@@ -48,12 +51,10 @@ export default function SalesList() {
 
     if (sortConfig.key) {
       data.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === "asc" ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === "asc" ? 1 : -1;
-        }
+        const valA = a[sortConfig.key] || "";
+        const valB = b[sortConfig.key] || "";
+        if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
       });
     }
@@ -94,7 +95,6 @@ export default function SalesList() {
       </div>
 
       <div className="bg-card p-4 rounded-xl shadow-sm border border-border space-y-4">
-        {/* Search Bar */}
         <div className="relative w-full">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -112,7 +112,6 @@ export default function SalesList() {
           />
         </div>
 
-        {/* Date Range and Status Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex items-center gap-2 flex-1">
             <Calendar
@@ -170,11 +169,12 @@ export default function SalesList() {
             <tbody className="divide-y divide-border">
               {paginatedSales.map((s) => (
                 <tr
-                  key={s.saleId}
+                  // ✅ FIX: Use 'id' (ObjectId) for key if possible, else saleId
+                  key={s.id || s.saleId}
                   className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-primary"
                 >
                   <td className="p-4 text-muted-foreground">
-                    {new Date(s.date).toLocaleDateString()}
+                    {s.date ? new Date(s.date).toLocaleDateString() : "-"}
                   </td>
                   <td className="p-4 font-mono text-sm font-semibold text-indigo-600 dark:text-indigo-400">
                     {s.saleId}
@@ -184,11 +184,11 @@ export default function SalesList() {
                   </td>
                   <td className="p-4 text-center">
                     <span className="bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs font-medium">
-                      {s.lines.length}
+                      {s.lines ? s.lines.length : 0}
                     </span>
                   </td>
                   <td className="p-4 font-bold text-lg text-foreground">
-                    ₹ {Number(s.total).toFixed(2)}
+                    ₹ {Number(s.total || 0).toFixed(2)}
                   </td>
                   <td className="p-4 text-muted-foreground">
                     ₹ {Number(s.amountPaid || 0).toFixed(2)}
@@ -221,6 +221,7 @@ export default function SalesList() {
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-3">
+                    {/* Note: Edit link might use saleId or id depending on your router setup */}
                     <Link
                       to={`/sales/edit/${s.saleId}`}
                       className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm"
@@ -228,7 +229,8 @@ export default function SalesList() {
                       Edit
                     </Link>
                     <button
-                      onClick={() => deleteSale(s.saleId)}
+                      // ✅ FIX: Here is the change! Pass 's.id' (MongoDB ID) instead of 's.saleId'
+                      onClick={() => deleteSale(s.id)}
                       className="text-destructive hover:text-destructive/80 font-medium text-sm"
                     >
                       Delete
