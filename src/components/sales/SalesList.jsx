@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, Calendar, FileText, PackageX } from "lucide-react";
+import { Search, Calendar, FileText, PackageX, Printer } from "lucide-react"; // ✅ Printer Icon ઉમેર્યું
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
 import SearchableDropdown from "../common/SearchableDropdown";
+import { generateInvoice } from "../../utils/invoiceGenerator"; // ✅ Invoice Generator Import કર્યું
 
 const ITEMS_PER_PAGE = 10;
 
 export default function SalesList() {
-  const { sales, deleteSale } = useStore();
+  const { sales, deleteSale, settings } = useStore(); // ✅ settings પણ લાવ્યા (બિલમાં નામ બતાવવા)
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({
@@ -23,6 +24,11 @@ export default function SalesList() {
       direction = "desc";
     }
     setSortConfig({ key, direction });
+  };
+
+  // ✅ Print Function
+  const handlePrint = (sale) => {
+    generateInvoice(sale, settings);
   };
 
   const [startDate, setStartDate] = useState("");
@@ -156,7 +162,6 @@ export default function SalesList() {
             <tbody className="divide-y divide-border">
               {paginatedSales.map((s) => (
                 <tr
-                  // ✅ FIX: Use 'id' (from backend virtual) or fallback to saleId to prevent key error
                   key={s.id || s.saleId}
                   className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-primary"
                 >
@@ -205,7 +210,17 @@ export default function SalesList() {
                       {s.paymentStatus || "Unpaid"}
                     </span>
                   </td>
-                  <td className="p-4 text-right space-x-3">
+                  <td className="p-4 text-right space-x-3 flex justify-end items-center">
+                    
+                    {/* ✅ NEW: Print Button */}
+                    <button
+                        onClick={() => handlePrint(s)}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded transition-colors"
+                        title="Print Invoice"
+                    >
+                        <Printer size={18} />
+                    </button>
+
                     <Link
                       to={`/sales/edit/${s.saleId}`}
                       className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm"
@@ -213,7 +228,6 @@ export default function SalesList() {
                       Edit
                     </Link>
                     <button
-                      // ✅ FIX: અહીં ખાસ s.id વાપરો (જે હવે Sale.js માંથી આવશે)
                       onClick={() => deleteSale(s.id)}
                       className="text-destructive hover:text-destructive/80 font-medium text-sm"
                     >
