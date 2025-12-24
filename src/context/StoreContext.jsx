@@ -34,7 +34,7 @@ export function StoreProvider({ user, children }) {
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
     
-    // ✅ Settings State (Default from User prop)
+    // ✅ Settings State (Initialize with fallback empty strings)
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
         ownerName: user?.ownerName || "",
@@ -70,7 +70,7 @@ export function StoreProvider({ user, children }) {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
                 if (res.ok) {
                     const data = await res.json();
-                    return data; // Return object
+                    return data; 
                 }
             } catch (e) {
                 console.warn("Failed to load profile:", e);
@@ -79,7 +79,7 @@ export function StoreProvider({ user, children }) {
         };
 
         try {
-            // બધા ડેટા એકસાથે લાવો (Settings પણ)
+            // Fetch all data including profile
             const [p, s, pur, sal, rec, pay, cust, profileData] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
@@ -88,10 +88,9 @@ export function StoreProvider({ user, children }) {
                 fetchSafe("receipts"),
                 fetchSafe("payments"),
                 fetchSafe("customers"),
-                fetchProfile() // ✅ Fetch Updated Settings
+                fetchProfile() // ✅ Fetch Profile
             ]);
 
-            // સ્ટેટ અપડેટ કરો
             setProducts(p);
             setSuppliers(s);
             setPurchases(pur);
@@ -100,9 +99,17 @@ export function StoreProvider({ user, children }) {
             setPayments(pay);
             setLedgers(cust);
 
-            // ✅ જો નવું પ્રોફાઈલ મળે તો અપડેટ કરો
+            // ✅ FIX: Explicitly map profile data to state keys
             if (profileData) {
-                setSettings(prev => ({ ...prev, ...profileData }));
+                setSettings({
+                    storeName: profileData.storeName || "",
+                    ownerName: profileData.ownerName || "",
+                    address: profileData.address || "",
+                    email: profileData.email || "",
+                    // Handle backend variations for phone/mobile and gst/gstNo
+                    phone: profileData.phone || profileData.mobile || "", 
+                    gst: profileData.gst || profileData.gstNo || ""
+                });
             }
 
         } catch (error) {
@@ -112,13 +119,15 @@ export function StoreProvider({ user, children }) {
         }
     }, []);
 
-    // ********** FIX: Infinite Loop Prevention **********
+    // ********** INFINITE LOOP PREVENTION & AUTO LOAD **********
     useEffect(() => {
-        if (user && user.storeId) {
-            console.log("Fetching Data for Store:", user.storeId);
+        const token = localStorage.getItem("token");
+        // Only fetch if we have a token (user logged in)
+        // Using just 'token' is safer than 'user.storeId' if 'user' prop is delayed
+        if (token) {
             refreshAllData();
         }
-    }, [user?.storeId, refreshAllData]); 
+    }, [refreshAllData]); 
 
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
@@ -131,6 +140,8 @@ export function StoreProvider({ user, children }) {
 
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
+                // If DELETE returns 204 No Content, treat as success
+                if (response.status === 204) return null;
                 throw new Error(`Server Error (${response.status}): Feature may not exist.`);
             }
 
@@ -335,16 +346,21 @@ export function StoreProvider({ user, children }) {
             await apiRequest("stores/profile", "PUT", newSettings);
             
             // 2. લોકલ સ્ટેટ અપડેટ કરો
-            setSettings(newSettings); 
+            // અહીં પણ મેપિંગ કરી લેવું સારું
+            setSettings(prev => ({
+                ...prev,
+                ...newSettings,
+                phone: newSettings.mobile || newSettings.phone || prev.phone,
+                gst: newSettings.gstNo || newSettings.gst || prev.gst
+            }));
             
-            // 3. લોકલ સ્ટોરેજમાં પણ અપડેટ કરો (જેથી રિફ્રેશ પહેલા ડેટા જળવાઈ રહે)
+            // 3. લોકલ સ્ટોરેજ અપડેટ કરો
             const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
             localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
 
             toast.success("Settings updated successfully");
         } catch (e) {
             console.error("Settings Update Failed:", e);
-            // Error toast is handled in apiRequest
         }
     }
 
