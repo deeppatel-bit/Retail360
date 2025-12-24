@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertCircle, ScanBarcode } from "lucide-react"; // ✅ ScanBarcode icon ઉમેર્યું
+import { Plus, Trash2, AlertCircle, ScanBarcode } from "lucide-react";
 import { useToast } from "../../context/ToastContext";
 
 import { useStore } from "../../context/StoreContext";
@@ -115,12 +115,11 @@ export default function SalesForm({ editMode }) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
-  // ✅ Barcode Logic: Handle Enter Key
+  // ✅ Barcode Logic
   const handleBarcodeScan = (e) => {
     if (e.key === "Enter") {
-      e.preventDefault(); // Prevent form submission
+      e.preventDefault(); 
 
-      // Find product by ID or Name (Case insensitive)
       const product = products.find(
         (p) =>
           p.id === barcodeInput ||
@@ -128,19 +127,16 @@ export default function SalesForm({ editMode }) {
       );
 
       if (product) {
-        // Check if product already exists in lines
         const existingIndex = lines.findIndex(
           (ln) => ln.productId === product.id
         );
 
         if (existingIndex >= 0) {
-          // Increase Qty
           const updatedLines = [...lines];
           updatedLines[existingIndex].qty += 1;
           setLines(updatedLines);
           toast.success(`Quantity increased for ${product.name}`);
         } else {
-          // Add new line (if first line is empty, replace it)
           if (lines.length === 1 && !lines[0].productId) {
             setLines([
               {
@@ -165,7 +161,7 @@ export default function SalesForm({ editMode }) {
           }
           toast.success(`${product.name} added!`);
         }
-        setBarcodeInput(""); // Clear input
+        setBarcodeInput(""); 
       } else {
         toast.error("Product not found!");
       }
@@ -221,9 +217,15 @@ export default function SalesForm({ editMode }) {
       paymentStatus,
       balanceDue,
     };
+
     if (editMode && id) {
-      updateSale(id, payload);
-      toast.success("Sale updated successfully");
+      // ✅ Corrected Logic: Use initial.id (MongoDB ID)
+      if (initial && initial.id) {
+          updateSale(initial.id, payload);
+          toast.success("Sale updated successfully");
+      } else {
+          toast.error("Error: Sale ID not found");
+      }
     } else {
       addSale(payload);
       toast.success("Sale recorded successfully");
