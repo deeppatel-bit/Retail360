@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, Save, ScanBarcode } from "lucide-react"; // Added ScanBarcode
+import { X, Save, ScanBarcode, Camera } from "lucide-react"; // ✅ Camera Icon Added
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
+import BarcodeScanner from "../common/BarcodeScanner"; // ✅ Scanner Import
 
 export default function ProductForm({ onClose, onSave, initial }) {
   const { addOrUpdateProduct, products } = useStore();
@@ -14,10 +15,13 @@ export default function ProductForm({ onClose, onSave, initial }) {
   const stockInputRef = useRef(null);
   const nameInputRef = useRef(null);
 
+  // ✅ Camera State
+  const [showScanner, setShowScanner] = useState(false);
+
   // Form State
   const [form, setForm] = useState({
     name: "",
-    barcode: "", // Added barcode field
+    barcode: "",
     category: "General",
     unit: "pcs",
     stock: 0,
@@ -42,36 +46,44 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const isEdit = !!(initial || id);
 
-  // Barcode Scan Logic
-  const handleScan = (e) => {
+  // ✅ Common Logic for Finding Product (Scanner & Input both use this)
+  const processBarcode = (code) => {
+    const foundProduct = products.find(p => p.barcode === code);
+
+    if (foundProduct) {
+      // 1. Existing Product Found
+      setForm({
+        ...foundProduct,
+        stock: 0, // Reset stock to 0 for adding new stock
+        id: undefined, // Remove ID to prevent overwriting
+        _id: undefined
+      });
+      toast.success("Product found! Enter new stock.");
+      // Focus on Stock input
+      setTimeout(() => stockInputRef.current?.focus(), 100);
+    } else {
+      // 2. New Product
+      setForm(prev => ({ ...prev, barcode: code }));
+      toast.info("New Product detected! Please enter details.");
+      // Focus on Name input
+      setTimeout(() => nameInputRef.current?.focus(), 100);
+    }
+  };
+
+  // ✅ Keyboard/USB Scanner Input Handler
+  const handleInputScan = (e) => {
     if (e.key === "Enter") {
-      e.preventDefault(); // Prevent form submission
+      e.preventDefault();
       const code = e.target.value.trim();
       if (!code) return;
-
-      // Find product in database
-      const foundProduct = products.find(p => p.barcode === code);
-
-      if (foundProduct) {
-        // 1. Existing Product Found
-        setForm({
-            ...foundProduct,
-            stock: 0, // Reset stock to 0 for adding new stock
-            id: undefined, // Remove ID to prevent overwriting (unless intended)
-            _id: undefined 
-        });
-        toast.success("Product found! Enter new stock.");
-        // Focus on Stock input
-        if (stockInputRef.current) stockInputRef.current.focus();
-
-      } else {
-        // 2. New Product
-        setForm(prev => ({ ...prev, barcode: code }));
-        toast.info("New Product detected! Please enter details.");
-        // Focus on Name input
-        if (nameInputRef.current) nameInputRef.current.focus();
-      }
+      processBarcode(code);
     }
+  };
+
+  // ✅ Camera Scan Handler
+  const handleCameraScan = (code) => {
+    setShowScanner(false); // Close camera modal
+    processBarcode(code);  // Process the scanned code
   };
 
   const validate = () => {
@@ -101,11 +113,9 @@ export default function ProductForm({ onClose, onSave, initial }) {
           (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
         );
 
-        // Allow same name only if barcodes are different (e.g. variants)
-        // Or strictly block duplicate names based on your requirement
         if (exists && exists.barcode !== form.barcode) {
-             toast.error("Product name already exists!");
-             return;
+          toast.error("Product name already exists!");
+          return;
         }
       }
 
@@ -118,7 +128,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
       // Success Message & Navigation
       toast.success(isEdit ? "Product Updated!" : "Product Added!");
-      
+
       if (onClose) onClose();
       else navigate("/products");
     }
@@ -126,7 +136,16 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-xl w-full max-w-lg shadow-2xl border border-border">
+      
+      {/* ✅ Show Scanner Modal if active */}
+      {showScanner && (
+        <BarcodeScanner 
+          onScanSuccess={handleCameraScan} 
+          onClose={() => setShowScanner(false)} 
+        />
+      )}
+
+      <div className="bg-card rounded-xl w-full max-w-lg shadow-2xl border border-border max-h-[90vh] overflow-y-auto">
         
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-border">
@@ -147,21 +166,31 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Body */}
         <div className="p-6 space-y-4">
           
-          {/* SCANNER INPUT SECTION */}
+          {/* ✅ SCANNER INPUT SECTION WITH CAMERA BUTTON */}
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
                 <label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
                     Scan Barcode First
                 </label>
-                <input
-                    value={form.barcode}
-                    onChange={(e) => change("barcode", e.target.value)}
-                    onKeyDown={handleScan}
-                    className="w-full bg-transparent border-none outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50"
-                    placeholder="Scan or type barcode & hit Enter..."
-                    autoFocus
-                />
+                <div className="flex gap-2">
+                    <input
+                        value={form.barcode}
+                        onChange={(e) => change("barcode", e.target.value)}
+                        onKeyDown={handleInputScan}
+                        className="flex-1 bg-transparent border-b border-indigo-300 outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50 focus:border-indigo-600"
+                        placeholder="Type & Enter..."
+                        autoFocus
+                    />
+                    {/* ✅ Camera Button */}
+                    <button 
+                        onClick={() => setShowScanner(true)}
+                        className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                        title="Open Camera"
+                    >
+                        <Camera size={20} />
+                    </button>
+                </div>
              </div>
           </div>
 
