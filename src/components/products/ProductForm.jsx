@@ -11,7 +11,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
   const { id } = useParams();
   const toast = useToast();
 
-  // Refs for focus management
   const stockInputRef = useRef(null);
   const nameInputRef = useRef(null);
 

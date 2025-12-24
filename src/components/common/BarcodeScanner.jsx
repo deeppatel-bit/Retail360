@@ -1,51 +1,69 @@
-import React, { useEffect } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import React, { useEffect, useRef } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { X } from "lucide-react";
 
 const BarcodeScanner = ({ onScanSuccess, onClose }) => {
-  useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      { 
-        fps: 10, 
-        qrbox: { width: 250, height: 150 }, // Barcode માટે લંબચોરસ બોક્સ
-        aspectRatio: 1.0 
-      },
-      false
-    );
+  const scannerRef = useRef(null);
 
-    scanner.render(
+  useEffect(() => {
+    // 1. Scanner ID નક્કી કરો
+    const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
+
+    const config = { 
+      fps: 10, // Frames per second
+      qrbox: { width: 250, height: 150 }, // Scanning Box Size
+      aspectRatio: 1.0 
+    };
+
+    // 2. ડાયરેક્ટ કેમેરો ચાલુ કરો (Rear Camera)
+    html5QrCode.start(
+      { facingMode: "environment" }, // "user" for front, "environment" for back
+      config,
       (decodedText) => {
-        // સ્કેન સફળ થાય ત્યારે
-        scanner.clear();
-        onScanSuccess(decodedText);
+        // 3. સ્કેન સફળ થાય ત્યારે
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            onScanSuccess(decodedText);
+        }).catch(err => console.error("Stop failed", err));
       },
       (errorMessage) => {
-        // સ્કેનિંગ ચાલુ હોય ત્યારે એરર ઇગ્નોર કરો
+        // સ્કેનિંગ ચાલુ હોય ત્યારે એરર આવે તો ઈગ્નોર કરો
       }
-    );
+    ).catch(err => {
+      console.error("Camera start failed", err);
+    });
 
-    // Cleanup function when component unmounts
+    // 4. Cleanup (જ્યારે બંધ કરો ત્યારે કેમેરો બંધ થવો જોઈએ)
     return () => {
-      scanner.clear().catch((error) => console.error("Failed to clear scanner. ", error));
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => html5QrCode.clear()).catch(err => console.error(err));
+      }
     };
   }, [onScanSuccess]);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center p-4">
-      <div className="relative w-full max-w-sm bg-white rounded-xl overflow-hidden shadow-2xl">
-        <div className="flex justify-between items-center p-3 border-b bg-gray-100">
-          <h3 className="font-bold text-gray-700">Scan Barcode</h3>
-          <button onClick={onClose} className="p-1 bg-gray-200 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors">
+    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4">
+      <div className="relative w-full max-w-sm bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-700">
+        
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
+          <span className="text-white/80 font-medium text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">
+            Scanning...
+          </span>
+          <button 
+            onClick={onClose} 
+            className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-red-500/80 transition-all"
+          >
             <X size={20} />
           </button>
         </div>
-        
-        {/* Camera Viewport */}
-        <div id="reader" className="w-full"></div>
-        
-        <div className="p-4 text-center text-sm text-gray-500">
-          Point camera at a barcode to scan automatically.
+
+        {/* Camera Area */}
+        <div id="reader" className="w-full h-[400px] bg-black"></div>
+
+        <div className="p-4 bg-gray-900 text-center">
+           <p className="text-gray-400 text-xs">Point camera at a barcode to scan</p>
         </div>
       </div>
     </div>
