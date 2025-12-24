@@ -1,18 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, Save } from "lucide-react";
+import { X, Save, ScanBarcode } from "lucide-react"; // Added ScanBarcode
 import { useStore } from "../../context/StoreContext";
-import { useToast } from "../../context/ToastContext"; // ✅ આ લાઈન હોવી જ જોઈએ
+import { useToast } from "../../context/ToastContext";
 
 export default function ProductForm({ onClose, onSave, initial }) {
   const { addOrUpdateProduct, products } = useStore();
   const navigate = useNavigate();
   const { id } = useParams();
-  const toast = useToast(); 
+  const toast = useToast();
+
+  // Refs for focus management
+  const stockInputRef = useRef(null);
+  const nameInputRef = useRef(null);
 
   // Form State
   const [form, setForm] = useState({
     name: "",
+    barcode: "", // Added barcode field
     category: "General",
     unit: "pcs",
     stock: 0,
@@ -23,7 +28,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const [errors, setErrors] = useState({});
 
-  // ✅ Load Data safely
+  // Load Data safely
   useEffect(() => {
     if (initial) {
       setForm(initial);
@@ -36,6 +41,38 @@ export default function ProductForm({ onClose, onSave, initial }) {
   }, [initial, id, products]);
 
   const isEdit = !!(initial || id);
+
+  // Barcode Scan Logic
+  const handleScan = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); // Prevent form submission
+      const code = e.target.value.trim();
+      if (!code) return;
+
+      // Find product in database
+      const foundProduct = products.find(p => p.barcode === code);
+
+      if (foundProduct) {
+        // 1. Existing Product Found
+        setForm({
+            ...foundProduct,
+            stock: 0, // Reset stock to 0 for adding new stock
+            id: undefined, // Remove ID to prevent overwriting (unless intended)
+            _id: undefined 
+        });
+        toast.success("Product found! Enter new stock.");
+        // Focus on Stock input
+        if (stockInputRef.current) stockInputRef.current.focus();
+
+      } else {
+        // 2. New Product
+        setForm(prev => ({ ...prev, barcode: code }));
+        toast.info("New Product detected! Please enter details.");
+        // Focus on Name input
+        if (nameInputRef.current) nameInputRef.current.focus();
+      }
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -58,15 +95,17 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const handleSubmit = () => {
     if (validate()) {
-      // ✅ Duplicate Check (ફક્ત નવી પ્રોડક્ટ માટે)
+      // Duplicate Check (only for new products)
       if (!isEdit && products) {
-        const exists = products.some(
+        const exists = products.find(
           (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
         );
 
-        if (exists) {
-          toast.error("Product already exists! Please update stock instead.");
-          return;
+        // Allow same name only if barcodes are different (e.g. variants)
+        // Or strictly block duplicate names based on your requirement
+        if (exists && exists.barcode !== form.barcode) {
+             toast.error("Product name already exists!");
+             return;
         }
       }
 
@@ -92,7 +131,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-border">
           <h3 className="text-xl font-semibold text-foreground">
-            {isEdit ? "Edit Product" : "Add New Product"}
+            {isEdit ? "Edit Product" : "Add Stock / New Product"}
           </h3>
           <button
             onClick={() => {
@@ -107,9 +146,29 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
         {/* Body */}
         <div className="p-6 space-y-4">
+          
+          {/* SCANNER INPUT SECTION */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
+             <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
+             <div className="flex-1">
+                <label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
+                    Scan Barcode First
+                </label>
+                <input
+                    value={form.barcode}
+                    onChange={(e) => change("barcode", e.target.value)}
+                    onKeyDown={handleScan}
+                    className="w-full bg-transparent border-none outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50"
+                    placeholder="Scan or type barcode & hit Enter..."
+                    autoFocus
+                />
+             </div>
+          </div>
+
           <label className="block">
             <div className="text-sm font-medium text-foreground mb-1">Product Name</div>
             <input
+              ref={nameInputRef} // Added ref
               value={form.name}
               onChange={(e) => change("name", e.target.value)}
               className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
@@ -145,18 +204,8 @@ export default function ProductForm({ onClose, onSave, initial }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="block">
-              <div className="text-sm text-foreground mb-1">Stock</div>
-              <input
-                type="number"
-                value={form.stock}
-                onChange={(e) => change("stock", Number(e.target.value))}
-                className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
-                  errors.stock ? "border-destructive" : "border-input"
-                }`}
-              />
-            </label>
-
+            
+            {/* Cost Price */}
             <label className="block">
               <div className="text-sm text-foreground mb-1">Cost ₹</div>
               <input
@@ -167,8 +216,23 @@ export default function ProductForm({ onClose, onSave, initial }) {
               />
             </label>
 
+            {/* Stock with Ref */}
             <label className="block">
-              <div className="text-sm text-foreground mb-1">Sell ₹</div>
+              <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">Stock</div>
+              <input
+                ref={stockInputRef} // Added ref
+                type="number"
+                value={form.stock}
+                onChange={(e) => change("stock", Number(e.target.value))}
+                className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
+                  errors.stock ? "border-destructive" : "border-input"
+                }`}
+              />
+            </label>
+
+            {/* Sell Price */}
+            <label className="block">
+              <div className="text-sm text-foreground mb-1 font-bold text-green-600">Sell ₹</div>
               <input
                 type="number"
                 value={form.sellPrice}
@@ -206,7 +270,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Save className="w-5 h-5" />
-            {isEdit ? "Save Changes" : "Add Product"}
+            {isEdit ? "Save Changes" : "Save Product"}
           </button>
         </div>
       </div>

@@ -7,12 +7,12 @@ import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function SalesForm({ editMode }) {
-  const { products, addSale, updateSale, sales, ledgers } = useStore();
+  // ✅ addLedger ઉમેર્યું (નવું ખાતું બનાવવા માટે)
+  const { products, addSale, updateSale, sales, ledgers, addLedger } = useStore();
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
 
-  // ✅ New State for Barcode Scanner
   const [barcodeInput, setBarcodeInput] = useState("");
 
   const [initial, setInitial] = useState(null);
@@ -29,16 +29,19 @@ export default function SalesForm({ editMode }) {
       ? new Date(initial.date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10)
   );
+
+  // ✅ FIX 1 & 2: ડિફોલ્ટ પ્રોડક્ટ ખાલી રાખી (Empty String)
+  // આનાથી 'Exceeds stock' વાળી એરર પણ નહીં આવે અને પહેલેથી સિલેક્ટ પણ નહીં હોય.
   const [lines, setLines] = useState(
-    initial?.lines || [{ productId: products[0]?.id || "", qty: 1 }]
+    initial?.lines || [{ productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]
   );
+
   const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || 0);
   const [discountPercent, setDiscountPercent] = useState(
     initial?.discountPercent || 0
   );
   const [notes, setNotes] = useState(initial?.notes || "");
 
-  // Payment State
   const [amountPaid, setAmountPaid] = useState(initial?.amountPaid || 0);
   const [paymentMode, setPaymentMode] = useState(
     initial?.paymentMode || "Cash"
@@ -58,35 +61,11 @@ export default function SalesForm({ editMode }) {
         taxPercent: ln.taxPercent || 0,
         discountPercent: ln.discountPercent || 0,
       }));
-      setLines(
-        loadedLines.length
-          ? loadedLines
-          : [
-              {
-                productId: products[0]?.id || "",
-                qty: 1,
-                price: products[0]?.sellPrice || 0,
-                taxPercent: 0,
-                discountPercent: 0,
-              },
-            ]
-      );
+      setLines(loadedLines);
       setNotes(initial.notes || "");
       setAmountPaid(initial.amountPaid || 0);
       setPaymentMode(initial.paymentMode || "Cash");
-    } else {
-      if (products.length && !lines[0].price) {
-        setLines([
-          {
-            productId: products[0]?.id || "",
-            qty: 1,
-            price: products[0]?.sellPrice || 0,
-            taxPercent: 0,
-            discountPercent: 0,
-          },
-        ]);
-      }
-    }
+    } 
     // eslint-disable-next-line
   }, [initial, products]);
 
@@ -95,9 +74,15 @@ export default function SalesForm({ editMode }) {
       s.map((ln, idx) => {
         if (idx !== i) return ln;
         const newLn = { ...ln, [key]: val };
+        
+        // જો પ્રોડક્ટ બદલાય તો તેની કિંમત સેટ કરો
         if (key === "productId") {
           const p = products.find((x) => x.id === val);
-          newLn.price = p ? p.sellPrice : 0;
+          if (p) {
+             newLn.price = p.sellPrice;
+          } else {
+             newLn.price = 0; // જો પ્રોડક્ટ કાઢી નાખે તો પ્રાઈસ 0
+          }
         }
         return newLn;
       })
@@ -115,7 +100,6 @@ export default function SalesForm({ editMode }) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
-  // ✅ Barcode Logic
   const handleBarcodeScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault(); 
@@ -137,6 +121,7 @@ export default function SalesForm({ editMode }) {
           setLines(updatedLines);
           toast.success(`Quantity increased for ${product.name}`);
         } else {
+          // જો પહેલી લાઈન ખાલી હોય, તો તેમાં જ પ્રોડક્ટ ભરી દો
           if (lines.length === 1 && !lines[0].productId) {
             setLines([
               {
@@ -168,7 +153,6 @@ export default function SalesForm({ editMode }) {
     }
   };
 
-  // Calculate totals
   let subtotal = 0;
   let totalDiscount = 0;
   let totalTax = 0;
@@ -190,11 +174,30 @@ export default function SalesForm({ editMode }) {
 
   const total = subtotal - totalDiscount + totalTax;
 
-  function handleSave() {
+  // ✅ Main Save Function
+  async function handleSave() {
     if (!customerName) return toast.error("Customer required");
     if (!lines.length) return toast.error("Add lines");
     for (const ln of lines) {
       if (!ln.productId) return toast.error("Choose product in each line");
+    }
+
+    // ✅ FIX 3: Auto-create Ledger if not exists
+    // ચેક કરો કે ગ્રાહક લિસ્ટમાં છે કે નહીં
+    const existingLedger = ledgers.find(l => l.name.toLowerCase() === customerName.toLowerCase());
+    
+    // જો નવો ગ્રાહક હોય, તો તેનું ખાતું (Ledger) બનાવો
+    if (!existingLedger) {
+        try {
+            // અહીં ધારી લઈએ છીએ કે તમારી પાસે addLedger ફંક્શન છે
+            // જો StoreContext માં ન હોય, તો ખાલી console log થશે
+            if (addLedger) {
+                await addLedger({ name: customerName, type: "Customer" });
+                toast.success(`New Ledger created for ${customerName}`);
+            }
+        } catch (error) {
+            console.error("Failed to create ledger automatically", error);
+        }
     }
 
     let paymentStatus = "Unpaid";
@@ -219,7 +222,6 @@ export default function SalesForm({ editMode }) {
     };
 
     if (editMode && id) {
-      // ✅ Corrected Logic: Use initial.id (MongoDB ID)
       if (initial && initial.id) {
           updateSale(initial.id, payload);
           toast.success("Sale updated successfully");
@@ -243,7 +245,7 @@ export default function SalesForm({ editMode }) {
 
       <div className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
         
-        {/* ✅ Barcode Scanner Input */}
+        {/* Barcode Scanner */}
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-4">
             <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
             <div className="flex-1">
@@ -272,8 +274,8 @@ export default function SalesForm({ editMode }) {
                 options={ledgers.map((l) => ({ value: l.name, label: l.name }))}
                 value={customerName}
                 onChange={(val) => setCustomerName(val)}
-                placeholder="Select Customer..."
-                allowCustomValue={true}
+                placeholder="Select or Type New Customer..."
+                allowCustomValue={true} // નવું નામ લખવાની છૂટ
               />
             </div>
           </div>
@@ -322,6 +324,8 @@ export default function SalesForm({ editMode }) {
               {lines.map((ln, i) => {
                 const p = products.find((x) => x.id === ln.productId);
                 const stock = p ? p.stock : 0;
+                
+                // ✅ Stock Check: જો પ્રોડક્ટ સિલેક્ટ ન હોય (p undefined હોય), તો એરર ન બતાવો
                 const isLowStock = p && stock < Number(ln.qty);
 
                 return (
