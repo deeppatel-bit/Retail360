@@ -1,49 +1,215 @@
-// ... imports ...
-// અહીં useToast ઈમ્પોર્ટ કરવાનું ભૂલતા નહીં
-import { useToast } from "../../context/ToastContext"; 
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { X, Save } from "lucide-react";
+import { useStore } from "../../context/StoreContext";
+import { useToast } from "../../context/ToastContext"; // ✅ આ લાઈન હોવી જ જોઈએ
 
 export default function ProductForm({ onClose, onSave, initial }) {
-  const { addOrUpdateProduct, products } = useStore(); // products લિસ્ટ અહીં મળે છે
+  const { addOrUpdateProduct, products } = useStore();
   const navigate = useNavigate();
   const { id } = useParams();
-  const toast = useToast(); // Toast મેસેજ માટે
+  const toast = useToast(); 
 
-  // ... form state code ...
+  // Form State
+  const [form, setForm] = useState({
+    name: "",
+    category: "General",
+    unit: "pcs",
+    stock: 0,
+    costPrice: 0,
+    sellPrice: 0,
+    reorder: 5,
+  });
+
+  const [errors, setErrors] = useState({});
+
+  // ✅ Load Data safely
+  useEffect(() => {
+    if (initial) {
+      setForm(initial);
+    } else if (id && products && products.length > 0) {
+      const p = products.find((x) => x.id === id);
+      if (p) {
+        setForm(p);
+      }
+    }
+  }, [initial, id, products]);
 
   const isEdit = !!(initial || id);
 
-  // ... validate function ...
+  const validate = () => {
+    const newErrors = {};
+    if (!form.name || !form.name.trim()) newErrors.name = "Product name is required";
+    if (!form.category || !form.category.trim()) newErrors.category = "Category is required";
+    if (form.stock < 0) newErrors.stock = "Stock cannot be negative";
+    if (form.costPrice < 0) newErrors.costPrice = "Cost price cannot be negative";
+    if (form.sellPrice < 0) newErrors.sellPrice = "Sell price cannot be negative";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const change = (key, val) => {
+    setForm((s) => ({ ...s, [key]: val }));
+    if (errors[key]) {
+      setErrors((prev) => ({ ...prev, [key]: null }));
+    }
+  };
+
+  const handleSubmit = () => {
+    if (validate()) {
+      // ✅ Duplicate Check (ફક્ત નવી પ્રોડક્ટ માટે)
+      if (!isEdit && products) {
+        const exists = products.some(
+          (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
+        );
+
+        if (exists) {
+          toast.error("Product already exists! Please update stock instead.");
+          return;
+        }
+      }
+
+      // Save Logic
+      if (onSave) {
+        onSave(form);
+      } else {
+        addOrUpdateProduct(form);
+      }
+
+      // Success Message & Navigation
+      toast.success(isEdit ? "Product Updated!" : "Product Added!");
+      
+      if (onClose) onClose();
+      else navigate("/products");
+    }
+  };
 
   return (
-    // ... JSX code ...
-    
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-card rounded-xl w-full max-w-lg shadow-2xl border border-border">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b border-border">
+          <h3 className="text-xl font-semibold text-foreground">
+            {isEdit ? "Edit Product" : "Add New Product"}
+          </h3>
           <button
             onClick={() => {
-              if (validate()) {
-                
-                // ✅ FIX: ડુપ્લીકેટ નામ ચેક કરો
-                if (!isEdit) { // માત્ર નવી પ્રોડક્ટ માટે
-                    const exists = products.some(p => 
-                        p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
-                    );
-
-                    if (exists) {
-                        toast.error("Product already exists! Please update stock instead.");
-                        return; // અહીંથી પાછા વળી જાઓ
-                    }
-                }
-
-                // જો બધું બરાબર હોય તો જ સેવ કરો
-                if (onSave) onSave(form);
-                else addOrUpdateProduct(form);
-                navigate("/products");
-              }
+              if (onClose) onClose();
+              else navigate("/products");
             }}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg flex items-center gap-2 hover:bg-primary/90"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-4">
+          <label className="block">
+            <div className="text-sm font-medium text-foreground mb-1">Product Name</div>
+            <input
+              value={form.name}
+              onChange={(e) => change("name", e.target.value)}
+              className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
+                errors.name ? "border-destructive" : "border-input"
+              }`}
+              placeholder="e.g., Basmati Rice"
+            />
+            {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
+          </label>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <div className="text-sm font-medium text-foreground mb-1">Category</div>
+              <input
+                value={form.category}
+                onChange={(e) => change("category", e.target.value)}
+                className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
+                  errors.category ? "border-destructive" : "border-input"
+                }`}
+              />
+              {errors.category && <p className="text-destructive text-xs mt-1">{errors.category}</p>}
+            </label>
+
+            <label className="block">
+              <div className="text-sm font-medium text-foreground mb-1">Unit</div>
+              <input
+                value={form.unit}
+                onChange={(e) => change("unit", e.target.value)}
+                className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="pcs, kg, box"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label className="block">
+              <div className="text-sm text-foreground mb-1">Stock</div>
+              <input
+                type="number"
+                value={form.stock}
+                onChange={(e) => change("stock", Number(e.target.value))}
+                className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
+                  errors.stock ? "border-destructive" : "border-input"
+                }`}
+              />
+            </label>
+
+            <label className="block">
+              <div className="text-sm text-foreground mb-1">Cost ₹</div>
+              <input
+                type="number"
+                value={form.costPrice}
+                onChange={(e) => change("costPrice", Number(e.target.value))}
+                className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </label>
+
+            <label className="block">
+              <div className="text-sm text-foreground mb-1">Sell ₹</div>
+              <input
+                type="number"
+                value={form.sellPrice}
+                onChange={(e) => change("sellPrice", Number(e.target.value))}
+                className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <div className="text-sm font-medium text-foreground mb-1">Reorder Point</div>
+            <input
+              type="number"
+              value={form.reorder}
+              onChange={(e) => change("reorder", Number(e.target.value))}
+              className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </label>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-border bg-muted/20 flex justify-end gap-3 rounded-b-xl">
+          <button
+            onClick={() => {
+              if (onClose) onClose();
+              else navigate("/products");
+            }}
+            className="px-4 py-2 border border-input rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Save className="w-5 h-5" />
             {isEdit ? "Save Changes" : "Add Product"}
           </button>
-    // ...
+        </div>
+      </div>
+    </div>
   );
 }
