@@ -4,7 +4,6 @@ import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
 
 export default function SettingsPage() {
-    // 1. setSettings ને અહીં destructure કરો (આ સૌથી મહત્વનું છે)
     const { settings, setSettings, isAppLoading } = useStore();
     const toast = useToast();
     const [loading, setLoading] = useState(false);
@@ -19,16 +18,18 @@ export default function SettingsPage() {
         gst: ""
     });
 
-    // 2. જવો ડેટા લોડ થાય એટલે ફોર્મ ભરી દો
+    // 1. ડેટા લોડ કરો (નામના તફાવતને હેન્ડલ કરો)
     useEffect(() => {
         if (settings) {
             setFormData({
                 storeName: settings.storeName || "",
                 ownerName: settings.ownerName || "",
-                mobile: settings.phone || settings.mobile || "", // બન્ને ફિલ્ડ ચેક કરો
+                // backend માં phone કે mobile જે પણ હોય તે લો
+                mobile: settings.phone || settings.mobile || "", 
                 email: settings.email || "",
                 address: settings.address || "",
-                gst: settings.gst || ""
+                // backend માં gstNo કે gst જે પણ હોય તે લો
+                gst: settings.gstNo || settings.gst || "" 
             });
         }
     }, [settings]);
@@ -42,19 +43,31 @@ export default function SettingsPage() {
         setLoading(true);
 
         try {
-            // અહીં તમારી API કોલ આવશે (ઉદાહરણ તરીકે)
-            // જો તમારી પાસે અલગ API function હોય તો તે વાપરો, નહીંતર setSettings ડાયરેક્ટ કામ કરશે 
-            // કારણ કે StoreContext માં setSettings ફંક્શન બેકએન્ડ કોલ હેન્ડલ કરતું હોય તો.
-            
-            // જો setSettings માત્ર લોકલ અપડેટ કરતું હોય, તો પહેલા API કોલ કરો:
             const token = localStorage.getItem("token");
+            
+            // ✅ FIX: બેકએન્ડ માટે પેલોડ તૈયાર કરો
+            // અહીં આપણે phone અને mobile બંને મોકલીએ છીએ જેથી ડેટા લોસ ન થાય
+            const apiPayload = {
+                storeName: formData.storeName,
+                ownerName: formData.ownerName,
+                email: formData.email,
+                address: formData.address,
+                
+                // બંને નામ મોકલો (સેફટી માટે)
+                phone: formData.mobile, 
+                mobile: formData.mobile,
+                
+                gstNo: formData.gst,
+                gst: formData.gst
+            };
+
             const response = await fetch("https://smart-store-backend.onrender.com/api/stores/profile", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(apiPayload)
             });
 
             const data = await response.json();
@@ -63,17 +76,11 @@ export default function SettingsPage() {
                 throw new Error(data.error || "Failed to update settings");
             }
 
-            // 3. ✅ GLOBAL STATE UPDATE (આનાથી Topbar માં નામ તરત બદલાશે)
-            // આપણે backend રિસ્પોન્સમાંથી અથવા formData માંથી નવો ડેટા સેટ કરીએ છીએ
-            setSettings({
-                ...settings, // જૂનો ડેટા (જેમ કે id, વગેરે) જાળવી રાખો
-                storeName: formData.storeName,
-                ownerName: formData.ownerName,
-                mobile: formData.mobile,
-                email: formData.email,
-                address: formData.address,
-                gst: formData.gst
-            });
+            // 3. ✅ GLOBAL STATE UPDATE (તરત જ રિફ્લેક્ટ કરવા માટે)
+            setSettings((prev) => ({
+                ...prev,
+                ...apiPayload // નવો ડેટા સેટ કરો
+            }));
 
             toast.success("Settings updated successfully!");
         } catch (error) {
@@ -84,7 +91,7 @@ export default function SettingsPage() {
         }
     };
 
-    if (isAppLoading) return <div className="p-8 text-center">Loading settings...</div>;
+    if (isAppLoading) return <div className="flex justify-center p-8 text-muted-foreground">Loading settings...</div>;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -152,7 +159,7 @@ export default function SettingsPage() {
                         />
                     </div>
 
-                    {/* Email (Read Only often) */}
+                    {/* Email */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground flex items-center gap-2">
                             <FileText size={16} /> Email Address
@@ -198,7 +205,7 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Submit Button */}
-                    <div className="md:col-span-2 flex justify-end pt-4">
+                    <div className="md:col-span-2 flex justify-end pt-4 border-t border-border mt-4">
                         <button
                             type="submit"
                             disabled={loading}

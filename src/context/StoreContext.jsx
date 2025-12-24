@@ -33,19 +33,22 @@ export function StoreProvider({ user, children }) {
     const [sales, setSales] = useState([]);
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
+    
+    // ✅ Settings State (Default from User prop)
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
+        ownerName: user?.ownerName || "",
         address: user?.address || "",
-        phone: user?.mobile || "",
-        gst: ""
+        phone: user?.phone || user?.mobile || "",
+        email: user?.email || "",
+        gst: user?.gst || user?.gstNo || ""
     });
 
     // ********** 1. DATA FETCHING (SAFE MODE) **********
     const refreshAllData = useCallback(async () => {
         const headers = getAuthHeaders();
 
-        // ✅ SAFE FETCH FUNCTION (આ એપને ક્રેશ થતા બચાવશે)
-        // જો બેકએન્ડ એરર આપે તો પણ આ ખાલી લિસ્ટ [] રિટર્ન કરશે.
+        // ✅ SAFE FETCH FUNCTION (For Lists)
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
@@ -53,25 +56,39 @@ export function StoreProvider({ user, children }) {
                 
                 if (res.ok && contentType && contentType.includes("application/json")) {
                     const data = await res.json();
-                    // 🛑 Safety Check: જો ડેટા લિસ્ટ (Array) હોય તો જ વાપરો
                     return Array.isArray(data) ? data : []; 
                 }
             } catch (e) {
                 console.warn(`Failed to load ${endpoint}:`, e);
             }
-            return []; // એરર આવે તો ખાલી લિસ્ટ રાખો
+            return [];
+        };
+
+        // ✅ SAFE FETCH PROFILE (For Object Data like Settings)
+        const fetchProfile = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    return data; // Return object
+                }
+            } catch (e) {
+                console.warn("Failed to load profile:", e);
+            }
+            return null;
         };
 
         try {
-            // બધા ડેટા એકસાથે લાવો
-            const [p, s, pur, sal, rec, pay, cust] = await Promise.all([
+            // બધા ડેટા એકસાથે લાવો (Settings પણ)
+            const [p, s, pur, sal, rec, pay, cust, profileData] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
                 fetchSafe("purchases"),
                 fetchSafe("sales"),
-                fetchSafe("receipts"), // હવે Receipt પેજ પર વ્હાઇટ સ્ક્રીન નહીં આવે
-                fetchSafe("payments"), // હવે Payment પેજ પર વ્હાઇટ સ્ક્રીન નહીં આવે
-                fetchSafe("customers")
+                fetchSafe("receipts"),
+                fetchSafe("payments"),
+                fetchSafe("customers"),
+                fetchProfile() // ✅ Fetch Updated Settings
             ]);
 
             // સ્ટેટ અપડેટ કરો
@@ -83,6 +100,11 @@ export function StoreProvider({ user, children }) {
             setPayments(pay);
             setLedgers(cust);
 
+            // ✅ જો નવું પ્રોફાઈલ મળે તો અપડેટ કરો
+            if (profileData) {
+                setSettings(prev => ({ ...prev, ...profileData }));
+            }
+
         } catch (error) {
             console.error("Global Fetch Error:", error);
         } finally {
@@ -92,12 +114,10 @@ export function StoreProvider({ user, children }) {
 
     // ********** FIX: Infinite Loop Prevention **********
     useEffect(() => {
-        // જો યુઝર હોય અને તેનું Store ID હોય તો જ ડેટા મંગાવો
         if (user && user.storeId) {
             console.log("Fetching Data for Store:", user.storeId);
             refreshAllData();
         }
-        // ⚠️ આ લાઈન લૂપ રોકવા માટે સૌથી મહત્વની છે
     }, [user?.storeId, refreshAllData]); 
 
     // ********** HELPER: GENERIC API REQUEST **********
@@ -110,7 +130,6 @@ export function StoreProvider({ user, children }) {
             });
 
             const contentType = response.headers.get("content-type");
-            // જો HTML એરર આવે તો પકડી લો
             if (!contentType || !contentType.includes("application/json")) {
                 throw new Error(`Server Error (${response.status}): Feature may not exist.`);
             }
@@ -128,7 +147,9 @@ export function StoreProvider({ user, children }) {
         }
     };
 
-    // ********** 2. PRODUCTS CRUD **********
+    // ********** CRUD OPERATIONS **********
+    
+    // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
             if (form.id) {
@@ -151,7 +172,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 3. SUPPLIERS CRUD **********
+    // 3. SUPPLIERS
     async function addSupplier(data) {
         try {
             await apiRequest("suppliers", "POST", data);
@@ -177,7 +198,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 4. CUSTOMERS (Ledger) **********
+    // 4. CUSTOMERS
     async function addLedger(data) {
         try {
             await apiRequest("customers", "POST", data);
@@ -203,7 +224,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 5. PURCHASES **********
+    // 5. PURCHASES
     async function addPurchase(data) {
         const payload = {
             ...data,
@@ -226,7 +247,7 @@ export function StoreProvider({ user, children }) {
     }
 
     async function deletePurchase(id) {
-        if (!await dialog.confirm({ title: "Delete Purchase", message: "Stock adjustments may vary based on backend logic.", type: "danger" })) return;
+        if (!await dialog.confirm({ title: "Delete Purchase", type: "danger" })) return;
         try {
             await apiRequest(`purchases/${id}`, "DELETE");
             toast.success("Purchase deleted");
@@ -234,7 +255,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 6. SALES **********
+    // 6. SALES
     async function addSale(data) {
         const insufficient = data.lines.find((ln) => {
             const p = products.find((x) => x.id === ln.productId);
@@ -266,7 +287,7 @@ export function StoreProvider({ user, children }) {
     }
 
     async function deleteSale(id) {
-        if (!await dialog.confirm({ title: "Delete Sale", message: "This will revert the transaction.", type: "danger" })) return;
+        if (!await dialog.confirm({ title: "Delete Sale", type: "danger" })) return;
         try {
             await apiRequest(`sales/${id}`, "DELETE");
             toast.success("Sale deleted");
@@ -274,7 +295,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 7. FINANCE **********
+    // 7. FINANCE
     async function addReceipt(data) {
         try {
             await apiRequest("receipts", "POST", { ...data, id: `REC-${Date.now()}` });
@@ -307,16 +328,30 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ********** 8. SETTINGS **********
+    // ✅ 8. SETTINGS UPDATE (FIXED)
     async function updateSettings(newSettings) {
-        setSettings(newSettings); 
-        toast.success("Settings saved locally");
+        try {
+            // 1. બેકએન્ડમાં સેવ કરો
+            await apiRequest("stores/profile", "PUT", newSettings);
+            
+            // 2. લોકલ સ્ટેટ અપડેટ કરો
+            setSettings(newSettings); 
+            
+            // 3. લોકલ સ્ટોરેજમાં પણ અપડેટ કરો (જેથી રિફ્રેશ પહેલા ડેટા જળવાઈ રહે)
+            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+            localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
+
+            toast.success("Settings updated successfully");
+        } catch (e) {
+            console.error("Settings Update Failed:", e);
+            // Error toast is handled in apiRequest
+        }
     }
 
     const value = {
         isAppLoading, refreshAllData,
         products, suppliers, ledgers, purchases, sales, receipts, payments, settings, 
-        setSettings: updateSettings,
+        setSettings: updateSettings, // Use the new async function
         
         addSupplier, editSupplier, deleteSupplier,
         addLedger, editLedger, deleteLedger,
