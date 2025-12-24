@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, Save, ScanBarcode, Camera } from "lucide-react"; // ✅ Camera Icon Added
+import { X, Save, ScanBarcode, Camera } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
-import BarcodeScanner from "../common/BarcodeScanner"; // ✅ Scanner Import
+import BarcodeScanner from "../common/BarcodeScanner";
 
 export default function ProductForm({ onClose, onSave, initial }) {
   const { addOrUpdateProduct, products } = useStore();
@@ -14,7 +14,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
   const stockInputRef = useRef(null);
   const nameInputRef = useRef(null);
 
-  // ✅ Camera State
+  // Camera State
   const [showScanner, setShowScanner] = useState(false);
 
   // Form State
@@ -26,6 +26,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
     stock: 0,
     costPrice: 0,
     sellPrice: 0,
+    gstPercent: 0, // ✅ New GST Field Added
     reorder: 5,
   });
 
@@ -38,38 +39,37 @@ export default function ProductForm({ onClose, onSave, initial }) {
     } else if (id && products && products.length > 0) {
       const p = products.find((x) => x.id === id);
       if (p) {
-        setForm(p);
+        setForm({
+            ...p,
+            gstPercent: p.gstPercent || 0 // Load existing GST or default to 0
+        });
       }
     }
   }, [initial, id, products]);
 
   const isEdit = !!(initial || id);
 
-  // ✅ Common Logic for Finding Product (Scanner & Input both use this)
+  // Logic for Finding Product
   const processBarcode = (code) => {
     const foundProduct = products.find(p => p.barcode === code);
 
     if (foundProduct) {
-      // 1. Existing Product Found
       setForm({
         ...foundProduct,
-        stock: 0, // Reset stock to 0 for adding new stock
-        id: undefined, // Remove ID to prevent overwriting
-        _id: undefined
+        stock: 0, 
+        id: undefined, 
+        _id: undefined,
+        gstPercent: foundProduct.gstPercent || 0 // Load GST if exists
       });
       toast.success("Product found! Enter new stock.");
-      // Focus on Stock input
       setTimeout(() => stockInputRef.current?.focus(), 100);
     } else {
-      // 2. New Product
       setForm(prev => ({ ...prev, barcode: code }));
       toast.info("New Product detected! Please enter details.");
-      // Focus on Name input
       setTimeout(() => nameInputRef.current?.focus(), 100);
     }
   };
 
-  // ✅ Keyboard/USB Scanner Input Handler
   const handleInputScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -79,10 +79,9 @@ export default function ProductForm({ onClose, onSave, initial }) {
     }
   };
 
-  // ✅ Camera Scan Handler
   const handleCameraScan = (code) => {
-    setShowScanner(false); // Close camera modal
-    processBarcode(code);  // Process the scanned code
+    setShowScanner(false); 
+    processBarcode(code);  
   };
 
   const validate = () => {
@@ -106,7 +105,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const handleSubmit = () => {
     if (validate()) {
-      // Duplicate Check (only for new products)
       if (!isEdit && products) {
         const exists = products.find(
           (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
@@ -118,14 +116,12 @@ export default function ProductForm({ onClose, onSave, initial }) {
         }
       }
 
-      // Save Logic
       if (onSave) {
         onSave(form);
       } else {
         addOrUpdateProduct(form);
       }
 
-      // Success Message & Navigation
       toast.success(isEdit ? "Product Updated!" : "Product Added!");
 
       if (onClose) onClose();
@@ -136,7 +132,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       
-      {/* ✅ Show Scanner Modal if active */}
       {showScanner && (
         <BarcodeScanner 
           onScanSuccess={handleCameraScan} 
@@ -165,7 +160,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Body */}
         <div className="p-6 space-y-4">
           
-          {/* ✅ SCANNER INPUT SECTION WITH CAMERA BUTTON */}
+          {/* Scanner Input */}
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
@@ -181,7 +176,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
                         placeholder="Type & Enter..."
                         autoFocus
                     />
-                    {/* ✅ Camera Button */}
                     <button 
                         onClick={() => setShowScanner(true)}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -196,7 +190,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
           <label className="block">
             <div className="text-sm font-medium text-foreground mb-1">Product Name</div>
             <input
-              ref={nameInputRef} // Added ref
+              ref={nameInputRef}
               value={form.name}
               onChange={(e) => change("name", e.target.value)}
               className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
@@ -232,8 +226,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            {/* Cost Price */}
             <label className="block">
               <div className="text-sm text-foreground mb-1">Cost ₹</div>
               <input
@@ -244,11 +236,10 @@ export default function ProductForm({ onClose, onSave, initial }) {
               />
             </label>
 
-            {/* Stock with Ref */}
             <label className="block">
               <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">Stock</div>
               <input
-                ref={stockInputRef} // Added ref
+                ref={stockInputRef}
                 type="number"
                 value={form.stock}
                 onChange={(e) => change("stock", Number(e.target.value))}
@@ -258,7 +249,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
               />
             </label>
 
-            {/* Sell Price */}
             <label className="block">
               <div className="text-sm text-foreground mb-1 font-bold text-green-600">Sell ₹</div>
               <input
@@ -270,15 +260,34 @@ export default function ProductForm({ onClose, onSave, initial }) {
             </label>
           </div>
 
-          <label className="block">
-            <div className="text-sm font-medium text-foreground mb-1">Reorder Point</div>
-            <input
-              type="number"
-              value={form.reorder}
-              onChange={(e) => change("reorder", Number(e.target.value))}
-              className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
-            />
-          </label>
+          {/* ✅ New Row: GST Selection & Reorder Point */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+                <div className="text-sm font-medium text-foreground mb-1">GST %</div>
+                <select
+                    value={form.gstPercent}
+                    onChange={(e) => change("gstPercent", Number(e.target.value))}
+                    className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                    <option value="0">0% (None)</option>
+                    <option value="5">5%</option>
+                    <option value="12">12%</option>
+                    <option value="18">18%</option>
+                    <option value="28">28%</option>
+                </select>
+            </label>
+
+            <label className="block">
+                <div className="text-sm font-medium text-foreground mb-1">Reorder Point</div>
+                <input
+                type="number"
+                value={form.reorder}
+                onChange={(e) => change("reorder", Number(e.target.value))}
+                className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                />
+            </label>
+          </div>
+
         </div>
 
         {/* Footer */}

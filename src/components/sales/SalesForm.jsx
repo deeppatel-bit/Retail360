@@ -66,6 +66,7 @@ export default function SalesForm({ editMode }) {
     // eslint-disable-next-line
   }, [initial, products]);
 
+  // ✅ FIX 1: Dropdown માંથી સિલેક્ટ કરતા GST આવે
   function changeLine(i, key, val) {
     setLines((s) =>
       s.map((ln, idx) => {
@@ -76,8 +77,11 @@ export default function SalesForm({ editMode }) {
           const p = products.find((x) => x.id === val);
           if (p) {
              newLn.price = p.sellPrice;
+             // ✅ Auto-fetch GST from Product
+             newLn.taxPercent = p.gstPercent || 0; 
           } else {
              newLn.price = 0;
+             newLn.taxPercent = 0;
           }
         }
         return newLn;
@@ -96,6 +100,7 @@ export default function SalesForm({ editMode }) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
+  // ✅ FIX 2: Barcode Scan કરતા GST આવે
   const handleBarcodeScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault(); 
@@ -103,7 +108,8 @@ export default function SalesForm({ editMode }) {
       const product = products.find(
         (p) =>
           p.id === barcodeInput ||
-          p.name.toLowerCase() === barcodeInput.toLowerCase()
+          p.name.toLowerCase() === barcodeInput.toLowerCase() ||
+          p.barcode === barcodeInput // Barcode match check
       );
 
       if (product) {
@@ -123,7 +129,7 @@ export default function SalesForm({ editMode }) {
                 productId: product.id,
                 qty: 1,
                 price: product.sellPrice,
-                taxPercent: 0,
+                taxPercent: product.gstPercent || 0, // ✅ Auto GST
                 discountPercent: 0,
               },
             ]);
@@ -134,7 +140,7 @@ export default function SalesForm({ editMode }) {
                 productId: product.id,
                 qty: 1,
                 price: product.sellPrice,
-                taxPercent: 0,
+                taxPercent: product.gstPercent || 0, // ✅ Auto GST
                 discountPercent: 0,
               },
             ]);
@@ -209,7 +215,7 @@ export default function SalesForm({ editMode }) {
       paymentMode,
       paymentStatus,
       balanceDue,
-      total: total // ✅ આ લાઈન તમારા જૂના કોડમાં ન હતી, હવે ઉમેરી દીધી છે.
+      total: total // ✅ Correctly saving Total Amount
     };
 
     if (editMode && id) {
