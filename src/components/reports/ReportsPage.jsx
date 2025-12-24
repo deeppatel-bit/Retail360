@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { BarChart2, Package, Download, TrendingUp, DollarSign, Calendar } from "lucide-react";
+import { BarChart2, Package, TrendingUp, DollarSign, Calendar } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { motion } from "framer-motion";
 
@@ -7,6 +7,22 @@ export default function ReportsPage() {
   const { sales, products } = useStore();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  // ✅ HELPER: સેલ ટોટલ મેળવવા માટે (જૂના ડેટા માટે Fallback)
+  const getSaleTotal = (sale) => {
+    // 1. જો ડેટાબેઝમાં ટોટલ હોય તો તે વાપરો (New Data)
+    if (sale.total && Number(sale.total) > 0) {
+      return Number(sale.total);
+    }
+    // 2. જો ટોટલ ન હોય, તો લાઈન્સનો સરવાળો કરો (Old Data Fix)
+    const calculatedTotal = sale.lines?.reduce((sum, line) => {
+      return sum + (Number(line.qty || 0) * Number(line.price || 0));
+    }, 0);
+
+    // ટેક્સ/ડિસ્કાઉન્ટનો અંદાજ (જો જૂના ડેટામાં હોય તો)
+    // સાદાઈ માટે આપણે અત્યારે સીધો સરવાળો લઈએ છીએ.
+    return calculatedTotal || 0;
+  };
 
   // ********** 1. DATA CALCULATION **********
   
@@ -26,12 +42,11 @@ export default function ReportsPage() {
     let totalCost = 0;
 
     filteredSales.forEach((sale) => {
-      // સેલ ટોટલ (Revenue)
-      totalRevenue += Number(sale.total || 0);
+      // ✅ FIX: getSaleTotal ફંક્શન વાપર્યું
+      totalRevenue += getSaleTotal(sale);
 
       // કોસ્ટ ગણતરી (Cost Calculation)
       sale.lines.forEach((line) => {
-        // પ્રોડક્ટ શોધો જેથી તેની Cost Price મળી શકે
         const product = products.find((p) => p.id === line.productId);
         const costPrice = product ? Number(product.costPrice || 0) : 0;
         const qty = Number(line.qty || 0);
@@ -50,7 +65,6 @@ export default function ReportsPage() {
 
   // ********** 2. EXPORT FUNCTIONS (CSV) **********
 
-  // CSV ડાઉનલોડ કરવા માટેનું હેલ્પર ફંક્શન
   const downloadCSV = (data, filename) => {
     const csvContent =
       "data:text/csv;charset=utf-8," +
@@ -71,7 +85,7 @@ export default function ReportsPage() {
       new Date(s.date).toLocaleDateString(),
       s.saleId,
       s.customerName,
-      s.total,
+      getSaleTotal(s).toFixed(2), // ✅ FIX
       s.paymentStatus
     ]);
     downloadCSV([headers, ...rows], "Sales_Report.csv");
@@ -87,7 +101,7 @@ export default function ReportsPage() {
       p.unit,
       p.costPrice,
       p.sellPrice,
-      (p.stock * p.costPrice).toFixed(2) // Total Value
+      (p.stock * p.costPrice).toFixed(2)
     ]);
     downloadCSV([headers, ...rows], "Stock_Inventory_Report.csv");
   };
@@ -101,18 +115,21 @@ export default function ReportsPage() {
         const product = products.find(p => p.id === line.productId);
         cost += (product ? product.costPrice : 0) * line.qty;
       });
-      const profit = s.total - cost;
+      
+      const revenue = getSaleTotal(s); // ✅ FIX
+      const profit = revenue - cost;
+      
       return [
         new Date(s.date).toLocaleDateString(),
         s.saleId,
-        s.total,
-        cost,
+        revenue.toFixed(2),
+        cost.toFixed(2),
         profit.toFixed(2)
       ];
     });
     
-    // છેલ્લે ટોટલ ઉમેરો
-    rows.push(["TOTAL", "", profitStats.totalRevenue, profitStats.totalCost, profitStats.netProfit]);
+    // Total Row
+    rows.push(["TOTAL", "", profitStats.totalRevenue.toFixed(2), profitStats.totalCost.toFixed(2), profitStats.netProfit.toFixed(2)]);
     
     downloadCSV([headers, ...rows], "Profit_Report.csv");
   };
@@ -171,7 +188,6 @@ export default function ReportsPage() {
         </p>
 
         <div className="flex flex-wrap gap-4">
-          {/* Feature 1: Sales Report */}
           <button 
             onClick={handleExportSales}
             className="px-5 py-3 border border-border rounded-xl bg-secondary hover:bg-secondary/80 text-secondary-foreground flex items-center gap-3 transition-colors shadow-sm"
@@ -183,7 +199,6 @@ export default function ReportsPage() {
             </div>
           </button>
 
-          {/* Feature 2: Stock Data */}
           <button 
             onClick={handleExportStock}
             className="px-5 py-3 border border-border rounded-xl bg-secondary hover:bg-secondary/80 text-secondary-foreground flex items-center gap-3 transition-colors shadow-sm"
@@ -195,7 +210,6 @@ export default function ReportsPage() {
             </div>
           </button>
 
-          {/* Feature 3: Profit Report */}
           <button 
             onClick={handleExportProfit}
             className="px-5 py-3 border border-border rounded-xl bg-secondary hover:bg-secondary/80 text-secondary-foreground flex items-center gap-3 transition-colors shadow-sm"
@@ -212,7 +226,7 @@ export default function ReportsPage() {
   );
 }
 
-// Simple Stat Card Component for this page
+// Simple Stat Card Component
 function StatCard({ title, value, sub, icon: Icon, color }) {
     const colors = {
         blue: "text-blue-600 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400",

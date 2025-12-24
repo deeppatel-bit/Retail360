@@ -7,7 +7,6 @@ import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function SalesForm({ editMode }) {
-  // ✅ addLedger ઉમેર્યું (નવું ખાતું બનાવવા માટે)
   const { products, addSale, updateSale, sales, ledgers, addLedger } = useStore();
   const { id } = useParams();
   const navigate = useNavigate();
@@ -30,7 +29,6 @@ export default function SalesForm({ editMode }) {
       : new Date().toISOString().slice(0, 10)
   );
 
-  // ✅ ડિફોલ્ટ પ્રોડક્ટ ખાલી રાખી (Empty String)
   const [lines, setLines] = useState(
     initial?.lines || [{ productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]
   );
@@ -74,7 +72,6 @@ export default function SalesForm({ editMode }) {
         if (idx !== i) return ln;
         const newLn = { ...ln, [key]: val };
         
-        // જો પ્રોડક્ટ બદલાય તો તેની કિંમત સેટ કરો
         if (key === "productId") {
           const p = products.find((x) => x.id === val);
           if (p) {
@@ -172,7 +169,7 @@ export default function SalesForm({ editMode }) {
 
   const total = subtotal - totalDiscount + totalTax;
 
-  // ✅ Main Save Function (Updated)
+  // ✅ Main Save Function
   async function handleSave() {
     if (!customerName) return toast.error("Customer required");
     if (!lines.length) return toast.error("Add lines");
@@ -180,7 +177,6 @@ export default function SalesForm({ editMode }) {
       if (!ln.productId) return toast.error("Choose product in each line");
     }
 
-    // ✅ Auto-create Ledger if not exists
     const existingLedger = ledgers.find(l => l.name.toLowerCase() === customerName.toLowerCase());
     
     if (!existingLedger) {
@@ -213,7 +209,7 @@ export default function SalesForm({ editMode }) {
       paymentMode,
       paymentStatus,
       balanceDue,
-      total: total // ✅ FIX: Total amount added to payload for Reports
+      total: total // ✅ આ લાઈન તમારા જૂના કોડમાં ન હતી, હવે ઉમેરી દીધી છે.
     };
 
     if (editMode && id) {
