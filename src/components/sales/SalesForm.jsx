@@ -30,8 +30,7 @@ export default function SalesForm({ editMode }) {
       : new Date().toISOString().slice(0, 10)
   );
 
-  // ✅ FIX 1 & 2: ડિફોલ્ટ પ્રોડક્ટ ખાલી રાખી (Empty String)
-  // આનાથી 'Exceeds stock' વાળી એરર પણ નહીં આવે અને પહેલેથી સિલેક્ટ પણ નહીં હોય.
+  // ✅ ડિફોલ્ટ પ્રોડક્ટ ખાલી રાખી (Empty String)
   const [lines, setLines] = useState(
     initial?.lines || [{ productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]
   );
@@ -81,7 +80,7 @@ export default function SalesForm({ editMode }) {
           if (p) {
              newLn.price = p.sellPrice;
           } else {
-             newLn.price = 0; // જો પ્રોડક્ટ કાઢી નાખે તો પ્રાઈસ 0
+             newLn.price = 0;
           }
         }
         return newLn;
@@ -121,7 +120,6 @@ export default function SalesForm({ editMode }) {
           setLines(updatedLines);
           toast.success(`Quantity increased for ${product.name}`);
         } else {
-          // જો પહેલી લાઈન ખાલી હોય, તો તેમાં જ પ્રોડક્ટ ભરી દો
           if (lines.length === 1 && !lines[0].productId) {
             setLines([
               {
@@ -174,7 +172,7 @@ export default function SalesForm({ editMode }) {
 
   const total = subtotal - totalDiscount + totalTax;
 
-  // ✅ Main Save Function
+  // ✅ Main Save Function (Updated)
   async function handleSave() {
     if (!customerName) return toast.error("Customer required");
     if (!lines.length) return toast.error("Add lines");
@@ -182,15 +180,11 @@ export default function SalesForm({ editMode }) {
       if (!ln.productId) return toast.error("Choose product in each line");
     }
 
-    // ✅ FIX 3: Auto-create Ledger if not exists
-    // ચેક કરો કે ગ્રાહક લિસ્ટમાં છે કે નહીં
+    // ✅ Auto-create Ledger if not exists
     const existingLedger = ledgers.find(l => l.name.toLowerCase() === customerName.toLowerCase());
     
-    // જો નવો ગ્રાહક હોય, તો તેનું ખાતું (Ledger) બનાવો
     if (!existingLedger) {
         try {
-            // અહીં ધારી લઈએ છીએ કે તમારી પાસે addLedger ફંક્શન છે
-            // જો StoreContext માં ન હોય, તો ખાલી console log થશે
             if (addLedger) {
                 await addLedger({ name: customerName, type: "Customer" });
                 toast.success(`New Ledger created for ${customerName}`);
@@ -219,6 +213,7 @@ export default function SalesForm({ editMode }) {
       paymentMode,
       paymentStatus,
       balanceDue,
+      total: total // ✅ FIX: Total amount added to payload for Reports
     };
 
     if (editMode && id) {
@@ -275,7 +270,7 @@ export default function SalesForm({ editMode }) {
                 value={customerName}
                 onChange={(val) => setCustomerName(val)}
                 placeholder="Select or Type New Customer..."
-                allowCustomValue={true} // નવું નામ લખવાની છૂટ
+                allowCustomValue={true}
               />
             </div>
           </div>
@@ -325,7 +320,6 @@ export default function SalesForm({ editMode }) {
                 const p = products.find((x) => x.id === ln.productId);
                 const stock = p ? p.stock : 0;
                 
-                // ✅ Stock Check: જો પ્રોડક્ટ સિલેક્ટ ન હોય (p undefined હોય), તો એરર ન બતાવો
                 const isLowStock = p && stock < Number(ln.qty);
 
                 return (
