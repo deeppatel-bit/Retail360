@@ -336,21 +336,29 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ NEW: Payment Receive Logic (Auto update Sales History)
+    // ✅ FIXED: RECEIVE PAYMENT LOGIC (With Robust Debugging & Name Matching)
     async function receivePayment(paymentData) {
         const { customerName, amount } = paymentData;
         let remainingAmount = Number(amount);
 
-        // 1. Find unpaid bills for this customer (Oldest First)
+        console.log("Processing Payment for:", customerName, "Amount:", amount);
+
+        // 1. Normalize name for comparison (remove extra spaces, lower case)
+        const cleanName = customerName.trim().toLowerCase();
+
+        // 2. Find unpaid bills for this customer (Oldest First)
+        // Note: We check against the normalized name
         const pendingSales = sales
-            .filter(s => 
-                s.customerName.toLowerCase() === customerName.toLowerCase() && 
-                s.paymentStatus !== "Paid"
-            )
+            .filter(s => {
+                const sName = s.customerName ? s.customerName.trim().toLowerCase() : "";
+                return sName === cleanName && s.paymentStatus !== "Paid";
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date)); 
 
+        console.log("Found Pending Bills:", pendingSales.length);
+
         try {
-            // 2. Pay off each bill one by one
+            // 3. Pay off each bill one by one
             for (const sale of pendingSales) {
                 if (remainingAmount <= 0) break;
 
@@ -373,10 +381,16 @@ export function StoreProvider({ user, children }) {
                 // Calculate new status
                 const newPaid = currentPaid + payForThisBill;
                 const newBalance = currentTotal - newPaid;
-                const newStatus = newBalance <= 0.5 ? "Paid" : "Partial"; // 0.5 buffer for rounding
+                // Buffer for floating point errors
+                const newStatus = newBalance <= 1 ? "Paid" : "Partial"; 
 
-                // Update Sale in Backend
-                await apiRequest(`sales/${sale.id || sale._id}`, "PUT", {
+                // Backend Update Call
+                // Use _id (Mongo ID) preferably, fallback to id
+                const dbId = sale._id || sale.id; 
+                
+                console.log(`Updating Bill ${sale.saleId} (${dbId}): Paid +${payForThisBill}, New Status: ${newStatus}`);
+
+                await apiRequest(`sales/${dbId}`, "PUT", {
                     ...sale,
                     amountPaid: newPaid,
                     balanceDue: newBalance,
@@ -384,19 +398,21 @@ export function StoreProvider({ user, children }) {
                 });
             }
 
-            // 3. Always create a Receipt for record keeping
+            // 4. Always create a Receipt for record keeping (This updates Ledger Balance)
             await apiRequest("receipts", "POST", { 
                 ...paymentData, 
                 id: `REC-${Date.now()}`,
-                note: remainingAmount > 0 ? "Advance Payment" : "Bill Payment"
+                note: remainingAmount > 0 ? "Advance / Overpayment" : "Bill Payment"
             });
 
-            toast.success("Payment received & Bills updated!");
-            refreshAllData(); 
+            toast.success("Payment Success! Ledger & Sales Updated.");
+            
+            // 5. Force Refresh All Data to reflect changes immediately
+            await refreshAllData();
 
         } catch (error) {
-            console.error("Payment Error:", error);
-            toast.error("Error updating sales records");
+            console.error("Payment Update Failed:", error);
+            toast.error("Failed to update sales records");
         }
     }
 
@@ -434,7 +450,7 @@ export function StoreProvider({ user, children }) {
         addReceipt, deleteReceipt,
         addPayment, deletePayment,
         
-        receivePayment // ✅ Added receivePayment to context
+        receivePayment // ✅ Exposed Function
     };
 
     return (
