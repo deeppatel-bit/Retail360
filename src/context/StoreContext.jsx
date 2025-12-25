@@ -34,7 +34,7 @@ export function StoreProvider({ user, children }) {
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
     
-    // ✅ Settings State (Initialize with fallback empty strings)
+    // ✅ Settings State
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
         ownerName: user?.ownerName || "",
@@ -64,7 +64,7 @@ export function StoreProvider({ user, children }) {
             return [];
         };
 
-        // ✅ SAFE FETCH PROFILE (For Object Data like Settings)
+        // ✅ SAFE FETCH PROFILE (For Object Data)
         const fetchProfile = async () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
@@ -106,7 +106,7 @@ export function StoreProvider({ user, children }) {
                     ownerName: profileData.ownerName || "",
                     address: profileData.address || "",
                     email: profileData.email || "",
-                    // Handle backend variations for phone/mobile and gst/gstNo
+                    // Handle backend variations
                     phone: profileData.phone || profileData.mobile || "", 
                     gst: profileData.gst || profileData.gstNo || ""
                 });
@@ -122,8 +122,6 @@ export function StoreProvider({ user, children }) {
     // ********** INFINITE LOOP PREVENTION & AUTO LOAD **********
     useEffect(() => {
         const token = localStorage.getItem("token");
-        // Only fetch if we have a token (user logged in)
-        // Using just 'token' is safer than 'user.storeId' if 'user' prop is delayed
         if (token) {
             refreshAllData();
         }
@@ -140,7 +138,6 @@ export function StoreProvider({ user, children }) {
 
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
-                // If DELETE returns 204 No Content, treat as success
                 if (response.status === 204) return null;
                 throw new Error(`Server Error (${response.status}): Feature may not exist.`);
             }
@@ -339,14 +336,75 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ 8. SETTINGS UPDATE (FIXED)
+    // ✅ NEW: Payment Receive Logic (Auto update Sales History)
+    async function receivePayment(paymentData) {
+        const { customerName, amount } = paymentData;
+        let remainingAmount = Number(amount);
+
+        // 1. Find unpaid bills for this customer (Oldest First)
+        const pendingSales = sales
+            .filter(s => 
+                s.customerName.toLowerCase() === customerName.toLowerCase() && 
+                s.paymentStatus !== "Paid"
+            )
+            .sort((a, b) => new Date(a.date) - new Date(b.date)); 
+
+        try {
+            // 2. Pay off each bill one by one
+            for (const sale of pendingSales) {
+                if (remainingAmount <= 0) break;
+
+                const currentPaid = Number(sale.amountPaid || 0);
+                const currentTotal = Number(sale.total || 0);
+                const pendingOnBill = currentTotal - currentPaid;
+
+                let payForThisBill = 0;
+
+                if (remainingAmount >= pendingOnBill) {
+                    // Fully pay this bill
+                    payForThisBill = pendingOnBill;
+                    remainingAmount -= pendingOnBill;
+                } else {
+                    // Partially pay this bill
+                    payForThisBill = remainingAmount;
+                    remainingAmount = 0;
+                }
+
+                // Calculate new status
+                const newPaid = currentPaid + payForThisBill;
+                const newBalance = currentTotal - newPaid;
+                const newStatus = newBalance <= 0.5 ? "Paid" : "Partial"; // 0.5 buffer for rounding
+
+                // Update Sale in Backend
+                await apiRequest(`sales/${sale.id || sale._id}`, "PUT", {
+                    ...sale,
+                    amountPaid: newPaid,
+                    balanceDue: newBalance,
+                    paymentStatus: newStatus
+                });
+            }
+
+            // 3. Always create a Receipt for record keeping
+            await apiRequest("receipts", "POST", { 
+                ...paymentData, 
+                id: `REC-${Date.now()}`,
+                note: remainingAmount > 0 ? "Advance Payment" : "Bill Payment"
+            });
+
+            toast.success("Payment received & Bills updated!");
+            refreshAllData(); 
+
+        } catch (error) {
+            console.error("Payment Error:", error);
+            toast.error("Error updating sales records");
+        }
+    }
+
+    // 8. SETTINGS UPDATE
     async function updateSettings(newSettings) {
         try {
-            // 1. બેકએન્ડમાં સેવ કરો
             await apiRequest("stores/profile", "PUT", newSettings);
             
-            // 2. લોકલ સ્ટેટ અપડેટ કરો
-            // અહીં પણ મેપિંગ કરી લેવું સારું
             setSettings(prev => ({
                 ...prev,
                 ...newSettings,
@@ -354,7 +412,6 @@ export function StoreProvider({ user, children }) {
                 gst: newSettings.gstNo || newSettings.gst || prev.gst
             }));
             
-            // 3. લોકલ સ્ટોરેજ અપડેટ કરો
             const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
             localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
 
@@ -367,7 +424,7 @@ export function StoreProvider({ user, children }) {
     const value = {
         isAppLoading, refreshAllData,
         products, suppliers, ledgers, purchases, sales, receipts, payments, settings, 
-        setSettings: updateSettings, // Use the new async function
+        setSettings: updateSettings,
         
         addSupplier, editSupplier, deleteSupplier,
         addLedger, editLedger, deleteLedger,
@@ -375,7 +432,9 @@ export function StoreProvider({ user, children }) {
         addPurchase, updatePurchase, deletePurchase,
         addSale, updateSale, deleteSale,
         addReceipt, deleteReceipt,
-        addPayment, deletePayment
+        addPayment, deletePayment,
+        
+        receivePayment // ✅ Added receivePayment to context
     };
 
     return (

@@ -29,29 +29,29 @@ export default function LedgerPage() {
         currentDue: 0 // To show in modal
     });
 
-    // ********** 1. BALANCE CALCULATION LOGIC (સુધારેલું) **********
+    // ********** 1. BALANCE CALCULATION LOGIC (Updated) **********
     const ledgerStats = useMemo(() => {
         return ledgers.map((customer) => {
-            // 1. ગ્રાહકે કરેલી કુલ ખરીદી (Total Sales Bill Amount)
+            // 1. Total Sales Bill Amount for the customer
             const totalSales = sales
                 .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, s) => sum + Number(s.total || 0), 0);
 
-            // 2. સેલ્સ વખતે જમા કરાવેલા પૈસા (Down Payment)
+            // 2. Down Payments made during sales
             const paidInSales = sales
                 .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, s) => sum + Number(s.amountPaid || 0), 0);
 
-            // 3. પાછળથી "Pay" બટન દ્વારા જમા કરાવેલા પૈસા (Receipts)
+            // 3. Payments made via Receipts (from "Pay" button)
             const paidInReceipts = receipts
                 .filter(r => r.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
-            // કુલ જમા (Total Received)
+            // Total Received Amount
             const totalReceived = paidInSales + paidInReceipts;
             
-            // ચોખ્ખું બેલેન્સ (Net Balance)
-            // જો (+) હોય તો લેવાના નીકળે (Due), જો (-) હોય તો ગ્રાહકના જમા છે (Advance)
+            // Net Balance Calculation
+            // Positive (+) means Due, Negative (-) means Advance
             const balance = totalSales - totalReceived; 
 
             return {
@@ -61,7 +61,7 @@ export default function LedgerPage() {
                 balance
             };
         }).sort((a, b) => a.name.localeCompare(b.name));
-    }, [ledgers, sales, receipts]); // receipts બદલાય એટલે ગણતરી ફરી થાય
+    }, [ledgers, sales, receipts]); // Recalculate when receipts change
 
     const filteredLedgers = ledgerStats.filter((l) =>
         l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -93,7 +93,7 @@ export default function LedgerPage() {
             amount: "",
             mode: "Cash",
             date: new Date().toISOString().slice(0, 10),
-            currentDue: customer.balance > 0 ? customer.balance : 0 // ફકત ઉધારી હોય તો જ બતાવો
+            currentDue: customer.balance > 0 ? customer.balance : 0 // Show only if due
         });
         setShowPaymentModal(true);
     };
@@ -104,13 +104,13 @@ export default function LedgerPage() {
             return toast.error("Enter valid amount");
         }
 
-        // Receipt Add કરો (આનાથી Balance ઓછું થશે)
+        // Add Receipt (This will reduce the balance)
         await addReceipt({
             customerName: paymentForm.customerName,
             amount: Number(paymentForm.amount),
             date: paymentForm.date,
             mode: paymentForm.mode,
-            note: "Payment Received via Ledger" // રિપોર્ટમાં દેખાશે
+            note: "Payment Received via Ledger" // Will show in report
         });
 
         toast.success(`Received ₹${paymentForm.amount} from ${paymentForm.customerName}`);
