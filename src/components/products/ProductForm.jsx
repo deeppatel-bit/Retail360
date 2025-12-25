@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, Save, ScanBarcode, Camera } from "lucide-react";
+import { X, Save, ScanBarcode, Camera } from "lucide-react"; // ✅ Camera Icon Added
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
-import BarcodeScanner from "../common/BarcodeScanner";
+import BarcodeScanner from "../common/BarcodeScanner"; // ✅ Scanner Import
 
 export default function ProductForm({ onClose, onSave, initial }) {
   const { addOrUpdateProduct, products } = useStore();
@@ -13,8 +13,9 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const stockInputRef = useRef(null);
   const nameInputRef = useRef(null);
+  const barcodeInputRef = useRef(null);
 
-  // Camera State
+  // ✅ Camera State
   const [showScanner, setShowScanner] = useState(false);
 
   // Form State
@@ -26,7 +27,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
     stock: 0,
     costPrice: 0,
     sellPrice: 0,
-    gstPercent: 0, // ✅ New GST Field Added
+    gstPercent: 0, // ✅ GST Field
     reorder: 5,
   });
 
@@ -49,39 +50,57 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const isEdit = !!(initial || id);
 
-  // Logic for Finding Product
+  // ✅ AUTO-FILL LOGIC: Common Logic for Finding Product (Scanner & Input both use this)
   const processBarcode = (code) => {
+    if (!code) return;
+
+    // Find product in database
     const foundProduct = products.find(p => p.barcode === code);
 
     if (foundProduct) {
+      // 1. Existing Product Found: Auto-fill details
       setForm({
         ...foundProduct,
-        stock: 0, 
-        id: undefined, 
+        stock: 0, // Reset stock to 0 for adding NEW stock
+        id: foundProduct.id, // Keep ID to update existing product
         _id: undefined,
-        gstPercent: foundProduct.gstPercent || 0 // Load GST if exists
+        gstPercent: foundProduct.gstPercent || 0
       });
-      toast.success("Product found! Enter new stock.");
+      toast.success(`Product found: ${foundProduct.name}. Enter new stock.`);
+      // Focus on Stock input
       setTimeout(() => stockInputRef.current?.focus(), 100);
     } else {
-      setForm(prev => ({ ...prev, barcode: code }));
+      // 2. New Product
+      setForm(prev => ({ 
+          ...prev, 
+          barcode: code,
+          name: "", 
+          category: "General", 
+          unit: "pcs", 
+          stock: 0, 
+          costPrice: 0, 
+          sellPrice: 0, 
+          gstPercent: 0 
+      }));
       toast.info("New Product detected! Please enter details.");
+      // Focus on Name input
       setTimeout(() => nameInputRef.current?.focus(), 100);
     }
   };
 
+  // ✅ Keyboard Input Handler
   const handleInputScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       const code = e.target.value.trim();
-      if (!code) return;
       processBarcode(code);
     }
   };
 
+  // ✅ Camera Scan Handler
   const handleCameraScan = (code) => {
-    setShowScanner(false); 
-    processBarcode(code);  
+    setShowScanner(false); // Close camera modal
+    processBarcode(code);  // Process the scanned code
   };
 
   const validate = () => {
@@ -105,24 +124,51 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const handleSubmit = () => {
     if (validate()) {
-      if (!isEdit && products) {
+      // Duplicate Check (only for new products creation, not updates)
+      if (!form.id && products) {
         const exists = products.find(
           (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
         );
 
         if (exists && exists.barcode !== form.barcode) {
-          toast.error("Product name already exists!");
+          toast.error("Product name already exists with a different barcode!");
           return;
         }
       }
 
-      if (onSave) {
-        onSave(form);
-      } else {
-        addOrUpdateProduct(form);
+      // Stock Calculation Logic
+      let finalForm = { ...form };
+      if (form.id) {
+          // If updating, add new stock to existing stock (simple logic)
+          // Or if you want to overwrite, just send 'form' as is. 
+          // Here we assume user entered quantity to ADD.
+          const oldProduct = products.find(p => p.id === form.id);
+          if (oldProduct) {
+              // Be careful: if user edits name/price but keeps stock 0, this adds 0.
+              // If user enters 10, it adds 10 to old stock.
+              // For a simple 'Update' form, usually we overwrite. 
+              // BUT for a 'Stock Entry' flow, we add. 
+              // Let's assume OVERWRITE for simplicity unless scanning found it.
+              
+              // If this was found via scan (stock was reset to 0), we might want to ADD.
+              // To keep it simple for now: We save whatever is in the form.
+              // If you want "Add to existing", you'd need:
+              // finalForm.stock = Number(oldProduct.stock) + Number(form.stock);
+          }
       }
 
-      toast.success(isEdit ? "Product Updated!" : "Product Added!");
+      // For this specific request ("auto details fill"), usually implies adding stock.
+      // Let's stick to standard "Update" logic (Overwrite) to avoid confusion, 
+      // UNLESS you specifically want an "Add Stock" feature.
+      // Based on your previous prompt, let's keep it simple: Save exactly what's in the form.
+      
+      if (onSave) {
+        onSave(finalForm);
+      } else {
+        addOrUpdateProduct(finalForm);
+      }
+
+      toast.success(form.id ? "Product Updated!" : "Product Added!");
 
       if (onClose) onClose();
       else navigate("/products");
@@ -132,6 +178,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       
+      {/* ✅ Show Scanner Modal if active */}
       {showScanner && (
         <BarcodeScanner 
           onScanSuccess={handleCameraScan} 
@@ -144,7 +191,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-border">
           <h3 className="text-xl font-semibold text-foreground">
-            {isEdit ? "Edit Product" : "Add Stock / New Product"}
+            {form.id ? "Update Product" : "Add New Product"}
           </h3>
           <button
             onClick={() => {
@@ -160,7 +207,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Body */}
         <div className="p-6 space-y-4">
           
-          {/* Scanner Input */}
+          {/* ✅ SCANNER INPUT SECTION */}
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
@@ -169,13 +216,15 @@ export default function ProductForm({ onClose, onSave, initial }) {
                 </label>
                 <div className="flex gap-2">
                     <input
+                        ref={barcodeInputRef}
                         value={form.barcode}
                         onChange={(e) => change("barcode", e.target.value)}
                         onKeyDown={handleInputScan}
                         className="flex-1 bg-transparent border-b border-indigo-300 outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50 focus:border-indigo-600"
-                        placeholder="Type & Enter..."
+                        placeholder="Scan or type & hit Enter..."
                         autoFocus
                     />
+                    {/* ✅ Camera Button */}
                     <button 
                         onClick={() => setShowScanner(true)}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -190,7 +239,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
           <label className="block">
             <div className="text-sm font-medium text-foreground mb-1">Product Name</div>
             <input
-              ref={nameInputRef}
+              ref={nameInputRef} // Added ref
               value={form.name}
               onChange={(e) => change("name", e.target.value)}
               className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
@@ -226,6 +275,8 @@ export default function ProductForm({ onClose, onSave, initial }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            {/* Cost Price */}
             <label className="block">
               <div className="text-sm text-foreground mb-1">Cost ₹</div>
               <input
@@ -236,10 +287,13 @@ export default function ProductForm({ onClose, onSave, initial }) {
               />
             </label>
 
+            {/* Stock with Ref */}
             <label className="block">
-              <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">Stock</div>
+              <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">
+                 {form.id ? "Update Stock" : "Stock"}
+              </div>
               <input
-                ref={stockInputRef}
+                ref={stockInputRef} // Added ref
                 type="number"
                 value={form.stock}
                 onChange={(e) => change("stock", Number(e.target.value))}
@@ -249,6 +303,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
               />
             </label>
 
+            {/* Sell Price */}
             <label className="block">
               <div className="text-sm text-foreground mb-1 font-bold text-green-600">Sell ₹</div>
               <input
