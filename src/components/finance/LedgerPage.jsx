@@ -1,26 +1,67 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Search, Edit, Trash2, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Phone, MapPin, Wallet, X, ArrowDownLeft } from "lucide-react"; // ✅ New Icons
 import { motion } from "framer-motion";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
+import { useToast } from "../../context/ToastContext";
 
 const ITEMS_PER_PAGE = 9;
 
 export default function LedgerPage() {
-    const { ledgers, addLedger, editLedger, deleteLedger, sales, receipts } = useStore();
+    const { ledgers, addLedger, editLedger, deleteLedger, sales, receipts, addReceipt } = useStore();
+    const toast = useToast();
+
     const [view, setView] = useState("manage"); // manage | report
     const [showForm, setShowForm] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ Payment Modal State
+    
     const [editingLedger, setEditingLedger] = useState(null);
     const [search, setSearch] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
-    // ********** Manage View Logic **********
-    const filteredLedgers = useMemo(() => {
-        return ledgers.filter((l) =>
-            l.name.toLowerCase().includes(search.toLowerCase()) ||
-            (l.contact && l.contact.toLowerCase().includes(search.toLowerCase()))
-        ).sort((a, b) => a.name.localeCompare(b.name));
-    }, [ledgers, search]);
+    // ✅ Payment Form State
+    const [paymentForm, setPaymentForm] = useState({
+        customerId: "",
+        customerName: "",
+        amount: "",
+        mode: "Cash",
+        date: new Date().toISOString().slice(0, 10)
+    });
+
+    // ********** Data Calculation **********
+    const ledgerStats = useMemo(() => {
+        return ledgers.map((customer) => {
+            // 1. Total Sales (ઉધારી)
+            const totalSales = sales
+                .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
+                .reduce((sum, s) => sum + Number(s.total || 0), 0);
+
+            // 2. Total Paid in Sales (સેલ વખતે આપેલા)
+            const paidInSales = sales
+                .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
+                .reduce((sum, s) => sum + Number(s.amountPaid || 0), 0);
+
+            // 3. Total Receipts (અલગથી જમા કરાવેલા)
+            const totalReceipts = receipts
+                .filter(r => r.customerName?.toLowerCase() === customer.name.toLowerCase())
+                .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+            const totalReceived = paidInSales + totalReceipts;
+            const balance = totalSales - totalReceived; // (+) Due, (-) Advance
+
+            return {
+                ...customer,
+                totalSales,
+                totalReceived,
+                balance
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+    }, [ledgers, sales, receipts]);
+
+    const filteredLedgers = ledgerStats.filter((l) =>
+        l.name.toLowerCase().includes(search.toLowerCase()) ||
+        (l.phone && l.phone.includes(search))
+    );
 
     const totalPages = Math.ceil(filteredLedgers.length / ITEMS_PER_PAGE);
     const paginatedLedgers = filteredLedgers.slice(
@@ -28,6 +69,7 @@ export default function LedgerPage() {
         currentPage * ITEMS_PER_PAGE
     );
 
+    // ********** Handlers **********
     function handleSave(ledger) {
         if (editingLedger) {
             editLedger(editingLedger.id, ledger);
@@ -38,37 +80,35 @@ export default function LedgerPage() {
         setEditingLedger(null);
     }
 
-    // ********** Report View Logic **********
-    const customerLedger = useMemo(() => {
-        const map = {};
-        // Initialize with all ledgers
-        ledgers.forEach(l => {
-            map[l.name] = { totalSales: 0, totalReceipts: 0, balance: 0 };
+    // ✅ Open Payment Modal
+    const openPaymentModal = (customer) => {
+        setPaymentForm({
+            customerId: customer.id,
+            customerName: customer.name,
+            amount: "",
+            mode: "Cash",
+            date: new Date().toISOString().slice(0, 10)
+        });
+        setShowPaymentModal(true);
+    };
+
+    // ✅ Submit Payment
+    const handlePaymentSubmit = async () => {
+        if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
+            return toast.error("Enter valid amount");
+        }
+
+        await addReceipt({
+            customerName: paymentForm.customerName,
+            amount: Number(paymentForm.amount),
+            date: paymentForm.date,
+            mode: paymentForm.mode,
+            note: "Payment Received via Ledger"
         });
 
-        // Process Sales
-        sales.forEach(s => {
-            const name = s.customerName;
-            if (!map[name]) map[name] = { totalSales: 0, totalReceipts: 0, balance: 0 };
-            map[name].totalSales += Number(s.total || 0);
-            map[name].totalReceipts += Number(s.amountPaid || 0);
-        });
-
-        // Process Receipts
-        receipts.forEach(r => {
-            const name = r.customerName;
-            if (!map[name]) map[name] = { totalSales: 0, totalReceipts: 0, balance: 0 };
-            map[name].totalReceipts += Number(r.amount || 0);
-        });
-
-        return Object.entries(map).map(([name, data]) => ({
-            name,
-            ...data,
-            balance: data.totalSales - data.totalReceipts
-        })).sort((a, b) => b.balance - a.balance);
-    }, [sales, receipts, ledgers]);
-
-    const filteredReport = customerLedger.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
+        toast.success(`Received ₹${paymentForm.amount} from ${paymentForm.customerName}`);
+        setShowPaymentModal(false);
+    };
 
     return (
         <div className="space-y-6">
@@ -93,6 +133,7 @@ export default function LedgerPage() {
                 </div>
             </div>
 
+            {/* VIEW 1: MANAGE CUSTOMERS (GRID) */}
             {view === "manage" && (
                 <>
                     <div className="flex flex-col md:flex-row justify-between gap-4 bg-card p-4 rounded-xl shadow-sm border border-border">
@@ -107,14 +148,10 @@ export default function LedgerPage() {
                             />
                         </div>
                         <button
-                            onClick={() => {
-                                setEditingLedger(null);
-                                setShowForm(true);
-                            }}
+                            onClick={() => { setEditingLedger(null); setShowForm(true); }}
                             className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20"
                         >
-                            <Plus size={20} />
-                            Add Customer
+                            <Plus size={20} /> Add Customer
                         </button>
                     </div>
 
@@ -127,63 +164,49 @@ export default function LedgerPage() {
                                 className="bg-card p-5 rounded-xl border border-border shadow-sm hover:shadow-md transition-all"
                             >
                                 <div className="flex items-start justify-between mb-3">
-                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center font-bold text-lg">
-                                        {ledger.name.charAt(0)}
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center font-bold text-lg uppercase">
+                                            {ledger.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-foreground">{ledger.name}</h3>
+                                            <p className="text-xs text-muted-foreground">{ledger.phone || "No Phone"}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => {
-                                                setEditingLedger(ledger);
-                                                setShowForm(true);
-                                            }}
-                                            className="text-muted-foreground hover:text-blue-600 transition-colors"
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => deleteLedger(ledger.id)}
-                                            className="text-muted-foreground hover:text-destructive transition-colors"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => { setEditingLedger(ledger); setShowForm(true); }} className="p-1.5 hover:bg-accent rounded text-blue-500"><Edit size={16} /></button>
+                                        <button onClick={() => deleteLedger(ledger.id)} className="p-1.5 hover:bg-accent rounded text-red-500"><Trash2 size={16} /></button>
                                     </div>
                                 </div>
 
-                                <h3 className="font-bold text-foreground mb-1">{ledger.name}</h3>
-
-                                {ledger.contact && (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                        <Phone size={14} />
-                                        {ledger.contact}
+                                <div className="bg-muted/30 p-3 rounded-lg border border-border flex justify-between items-center mt-3">
+                                    <div className="text-sm">
+                                        <p className="text-muted-foreground text-xs uppercase">Net Balance</p>
+                                        <p className={`font-bold ${ledger.balance > 0 ? "text-red-600" : ledger.balance < 0 ? "text-green-600" : "text-gray-500"}`}>
+                                            {ledger.balance > 0 
+                                                ? `₹ ${ledger.balance.toFixed(2)} (Due)` 
+                                                : ledger.balance < 0 
+                                                    ? `₹ ${Math.abs(ledger.balance).toFixed(2)} (Adv)` 
+                                                    : "₹ 0.00"}
+                                        </p>
                                     </div>
-                                )}
-
-
-
-                                {ledger.address && (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground/80 mt-2">
-                                        <MapPin size={14} />
-                                        <span className="line-clamp-1">{ledger.address}</span>
-                                    </div>
-                                )}
+                                    {/* ✅ Pay Button */}
+                                    <button 
+                                        onClick={() => openPaymentModal(ledger)}
+                                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg flex items-center gap-1 shadow-sm"
+                                    >
+                                        <ArrowDownLeft size={14} /> Pay
+                                    </button>
+                                </div>
                             </motion.div>
                         ))}
                     </div>
 
-                    {paginatedLedgers.length === 0 && (
-                        <div className="text-center py-12 bg-card rounded-xl border border-border">
-                            <p className="text-muted-foreground">No customers found</p>
-                        </div>
-                    )}
-
-                    <PaginationControls
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={setCurrentPage}
-                    />
+                    <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                 </>
             )}
 
+            {/* VIEW 2: BALANCE REPORT (TABLE) */}
             {view === "report" && (
                 <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
                     <div className="p-4 border-b border-border">
@@ -204,44 +227,97 @@ export default function LedgerPage() {
                                 <th className="p-4">Customer Name</th>
                                 <th className="p-4 text-right">Total Sales</th>
                                 <th className="p-4 text-right">Total Received</th>
-                                <th className="p-4 text-right">Balance Due</th>
+                                <th className="p-4 text-right">Net Balance</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {filteredReport.map((d) => (
-                                <tr key={d.name} className="hover:bg-accent/50 transition-colors">
+                            {filteredLedgers.map((d) => (
+                                <tr key={d.id} className="hover:bg-accent/50 transition-colors">
                                     <td className="p-4 font-medium text-foreground">{d.name}</td>
-                                    <td className="p-4 text-right text-muted-foreground">
-                                        ₹ {Number(d.totalSales).toFixed(2)}
-                                    </td>
-                                    <td className="p-4 text-right text-muted-foreground">
-                                        ₹ {Number(d.totalReceipts).toFixed(2)}
-                                    </td>
-                                    <td className={`p-4 text-right font-bold ${d.balance > 0 ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
-                                        ₹ {Number(d.balance).toFixed(2)}
+                                    <td className="p-4 text-right text-muted-foreground">₹ {d.totalSales.toFixed(2)}</td>
+                                    <td className="p-4 text-right text-muted-foreground">₹ {d.totalReceived.toFixed(2)}</td>
+                                    <td className="p-4 text-right font-bold">
+                                        {d.balance > 0 ? (
+                                            <span className="text-red-600">₹ {d.balance.toFixed(2)} (Due)</span>
+                                        ) : d.balance < 0 ? (
+                                            <span className="text-green-600">₹ {Math.abs(d.balance).toFixed(2)} (Adv)</span>
+                                        ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
-                            {!filteredReport.length && (
-                                <tr>
-                                    <td colSpan="4" className="p-8 text-center text-muted-foreground">
-                                        No records found.
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
             )}
 
+            {/* ✅ PAYMENT MODAL */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-card w-full max-w-sm rounded-xl shadow-2xl border border-border p-6 animate-in fade-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-4 border-b border-border pb-3">
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground">Collect Payment</h3>
+                                <p className="text-xs text-muted-foreground">From: {paymentForm.customerName}</p>
+                            </div>
+                            <button onClick={() => setShowPaymentModal(false)} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium text-foreground">Amount (₹)</label>
+                                <div className="relative mt-1">
+                                    <span className="absolute left-3 top-2 text-muted-foreground">₹</span>
+                                    <input 
+                                        type="number" 
+                                        className="w-full border p-2 pl-7 rounded-lg bg-background text-foreground focus:ring-2 focus:ring-green-500 outline-none font-bold text-lg" 
+                                        value={paymentForm.amount} 
+                                        onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} 
+                                        autoFocus
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-foreground">Payment Mode</label>
+                                <select 
+                                    className="w-full border p-2 rounded-lg mt-1 bg-background text-foreground"
+                                    value={paymentForm.mode}
+                                    onChange={e => setPaymentForm({...paymentForm, mode: e.target.value})}
+                                >
+                                    <option>Cash</option>
+                                    <option>UPI</option>
+                                    <option>Bank Transfer</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-foreground">Date</label>
+                                <input 
+                                    type="date"
+                                    className="w-full border p-2 rounded-lg mt-1 bg-background text-foreground"
+                                    value={paymentForm.date}
+                                    onChange={e => setPaymentForm({...paymentForm, date: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => setShowPaymentModal(false)} className="flex-1 py-2.5 border border-input rounded-lg hover:bg-accent">Cancel</button>
+                            <button onClick={handlePaymentSubmit} className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium shadow-sm">
+                                Confirm Received
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CUSTOMER FORM MODAL */}
             {showForm && (
                 <LedgerForm
                     initial={editingLedger}
                     onSave={handleSave}
-                    onCancel={() => {
-                        setShowForm(false);
-                        setEditingLedger(null);
-                    }}
+                    onCancel={() => { setShowForm(false); setEditingLedger(null); }}
                 />
             )}
         </div>
@@ -249,88 +325,30 @@ export default function LedgerPage() {
 }
 
 function LedgerForm({ initial, onSave, onCancel }) {
-    const [form, setForm] = useState(
-        initial || {
-            name: "",
-            contact: "",
-            address: "",
-        }
-    );
-
-    function handleSubmit(e) {
-        e.preventDefault();
-        onSave(form);
-    }
+    const [form, setForm] = useState(initial || { name: "", phone: "", address: "" });
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border"
-            >
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border">
                 <div className="p-6 border-b border-border">
-                    <h2 className="text-xl font-bold text-foreground">
-                        {initial ? "Edit Customer" : "Add New Customer"}
-                    </h2>
+                    <h2 className="text-xl font-bold text-foreground">{initial ? "Edit Customer" : "Add New Customer"}</h2>
                 </div>
-
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                            Customer Name *
-                        </label>
-                        <input
-                            type="text"
-                            value={form.name}
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                            required
-                        />
+                        <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                        <input className="w-full px-4 py-2 border rounded-lg bg-background" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                     </div>
-
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                            Contact Number
-                        </label>
-                        <input
-                            type="tel"
-                            value={form.contact}
-                            onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                            className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                        />
+                        <label className="block text-sm font-medium mb-1">Phone</label>
+                        <input className="w-full px-4 py-2 border rounded-lg bg-background" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                     </div>
-
-
-
                     <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                            Address
-                        </label>
-                        <textarea
-                            value={form.address}
-                            onChange={(e) => setForm({ ...form, address: e.target.value })}
-                            className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                            rows="2"
-                        />
+                        <label className="block text-sm font-medium mb-1">Address</label>
+                        <textarea className="w-full px-4 py-2 border rounded-lg bg-background" rows="2" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
                     </div>
-
-
-
                     <div className="flex gap-3 pt-4">
-                        <button
-                            type="button"
-                            onClick={onCancel}
-                            className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent/50 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
-                        >
-                            Save
-                        </button>
+                        <button type="button" onClick={onCancel} className="flex-1 py-2 border rounded-lg hover:bg-accent">Cancel</button>
+                        <button type="submit" className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">Save</button>
                     </div>
                 </form>
             </motion.div>
