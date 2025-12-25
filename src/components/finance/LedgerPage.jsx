@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Search, Edit, Trash2, Phone, MapPin, Wallet, X, ArrowDownLeft } from "lucide-react"; // ✅ New Icons
+import { Plus, Search, Edit, Trash2, Phone, MapPin, Wallet, X, ArrowDownLeft, CheckCircle } from "lucide-react"; 
 import { motion } from "framer-motion";
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
@@ -13,41 +13,46 @@ export default function LedgerPage() {
 
     const [view, setView] = useState("manage"); // manage | report
     const [showForm, setShowForm] = useState(false);
-    const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ Payment Modal State
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
     
     const [editingLedger, setEditingLedger] = useState(null);
     const [search, setSearch] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
-    // ✅ Payment Form State
+    // Payment Form State
     const [paymentForm, setPaymentForm] = useState({
         customerId: "",
         customerName: "",
         amount: "",
         mode: "Cash",
-        date: new Date().toISOString().slice(0, 10)
+        date: new Date().toISOString().slice(0, 10),
+        currentDue: 0 // To show in modal
     });
 
-    // ********** Data Calculation **********
+    // ********** 1. BALANCE CALCULATION LOGIC (સુધારેલું) **********
     const ledgerStats = useMemo(() => {
         return ledgers.map((customer) => {
-            // 1. Total Sales (ઉધારી)
+            // 1. ગ્રાહકે કરેલી કુલ ખરીદી (Total Sales Bill Amount)
             const totalSales = sales
                 .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, s) => sum + Number(s.total || 0), 0);
 
-            // 2. Total Paid in Sales (સેલ વખતે આપેલા)
+            // 2. સેલ્સ વખતે જમા કરાવેલા પૈસા (Down Payment)
             const paidInSales = sales
                 .filter(s => s.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, s) => sum + Number(s.amountPaid || 0), 0);
 
-            // 3. Total Receipts (અલગથી જમા કરાવેલા)
-            const totalReceipts = receipts
+            // 3. પાછળથી "Pay" બટન દ્વારા જમા કરાવેલા પૈસા (Receipts)
+            const paidInReceipts = receipts
                 .filter(r => r.customerName?.toLowerCase() === customer.name.toLowerCase())
                 .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
-            const totalReceived = paidInSales + totalReceipts;
-            const balance = totalSales - totalReceived; // (+) Due, (-) Advance
+            // કુલ જમા (Total Received)
+            const totalReceived = paidInSales + paidInReceipts;
+            
+            // ચોખ્ખું બેલેન્સ (Net Balance)
+            // જો (+) હોય તો લેવાના નીકળે (Due), જો (-) હોય તો ગ્રાહકના જમા છે (Advance)
+            const balance = totalSales - totalReceived; 
 
             return {
                 ...customer,
@@ -56,7 +61,7 @@ export default function LedgerPage() {
                 balance
             };
         }).sort((a, b) => a.name.localeCompare(b.name));
-    }, [ledgers, sales, receipts]);
+    }, [ledgers, sales, receipts]); // receipts બદલાય એટલે ગણતરી ફરી થાય
 
     const filteredLedgers = ledgerStats.filter((l) =>
         l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -80,30 +85,32 @@ export default function LedgerPage() {
         setEditingLedger(null);
     }
 
-    // ✅ Open Payment Modal
+    // ✅ Open Payment Modal with Due Amount
     const openPaymentModal = (customer) => {
         setPaymentForm({
             customerId: customer.id,
             customerName: customer.name,
             amount: "",
             mode: "Cash",
-            date: new Date().toISOString().slice(0, 10)
+            date: new Date().toISOString().slice(0, 10),
+            currentDue: customer.balance > 0 ? customer.balance : 0 // ફકત ઉધારી હોય તો જ બતાવો
         });
         setShowPaymentModal(true);
     };
 
-    // ✅ Submit Payment
+    // ✅ Handle Payment Submit
     const handlePaymentSubmit = async () => {
         if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
             return toast.error("Enter valid amount");
         }
 
+        // Receipt Add કરો (આનાથી Balance ઓછું થશે)
         await addReceipt({
             customerName: paymentForm.customerName,
             amount: Number(paymentForm.amount),
             date: paymentForm.date,
             mode: paymentForm.mode,
-            note: "Payment Received via Ledger"
+            note: "Payment Received via Ledger" // રિપોર્ટમાં દેખાશે
         });
 
         toast.success(`Received ₹${paymentForm.amount} from ${paymentForm.customerName}`);
@@ -118,22 +125,16 @@ export default function LedgerPage() {
                     <p className="text-muted-foreground">Manage customers and view balances</p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => setView("manage")}
-                        className={`px-4 py-2 rounded-lg transition-colors ${view === "manage" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
-                    >
+                    <button onClick={() => setView("manage")} className={`px-4 py-2 rounded-lg transition-colors ${view === "manage" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                         Manage Customers
                     </button>
-                    <button
-                        onClick={() => setView("report")}
-                        className={`px-4 py-2 rounded-lg transition-colors ${view === "report" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
-                    >
+                    <button onClick={() => setView("report")} className={`px-4 py-2 rounded-lg transition-colors ${view === "report" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                         Balance Report
                     </button>
                 </div>
             </div>
 
-            {/* VIEW 1: MANAGE CUSTOMERS (GRID) */}
+            {/* MANAGE VIEW */}
             {view === "manage" && (
                 <>
                     <div className="flex flex-col md:flex-row justify-between gap-4 bg-card p-4 rounded-xl shadow-sm border border-border">
@@ -147,22 +148,14 @@ export default function LedgerPage() {
                                 className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
                             />
                         </div>
-                        <button
-                            onClick={() => { setEditingLedger(null); setShowForm(true); }}
-                            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20"
-                        >
+                        <button onClick={() => { setEditingLedger(null); setShowForm(true); }} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20">
                             <Plus size={20} /> Add Customer
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {paginatedLedgers.map((ledger) => (
-                            <motion.div
-                                key={ledger.id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-card p-5 rounded-xl border border-border shadow-sm hover:shadow-md transition-all"
-                            >
+                            <motion.div key={ledger.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card p-5 rounded-xl border border-border shadow-sm hover:shadow-md transition-all">
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center font-bold text-lg uppercase">
@@ -190,36 +183,26 @@ export default function LedgerPage() {
                                                     : "₹ 0.00"}
                                         </p>
                                     </div>
-                                    {/* ✅ Pay Button */}
+                                    {/* ✅ Pay Button - Opens Modal */}
                                     <button 
                                         onClick={() => openPaymentModal(ledger)}
                                         className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg flex items-center gap-1 shadow-sm"
                                     >
-                                        <ArrowDownLeft size={14} /> Pay
+                                        <ArrowDownLeft size={14} /> Pay / Jama
                                     </button>
                                 </div>
                             </motion.div>
                         ))}
                     </div>
-
                     <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                 </>
             )}
 
-            {/* VIEW 2: BALANCE REPORT (TABLE) */}
+            {/* REPORT VIEW */}
             {view === "report" && (
                 <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
                     <div className="p-4 border-b border-border">
-                        <div className="relative max-w-md">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search report..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
-                            />
-                        </div>
+                        <input type="text" placeholder="Search report..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-4 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background text-foreground" />
                     </div>
                     <table className="w-full text-left">
                         <thead className="bg-muted/50 text-muted-foreground font-semibold border-b border-border">
@@ -227,7 +210,7 @@ export default function LedgerPage() {
                                 <th className="p-4">Customer Name</th>
                                 <th className="p-4 text-right">Total Sales</th>
                                 <th className="p-4 text-right">Total Received</th>
-                                <th className="p-4 text-right">Net Balance</th>
+                                <th className="p-4 text-right">Balance Due</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -236,14 +219,8 @@ export default function LedgerPage() {
                                     <td className="p-4 font-medium text-foreground">{d.name}</td>
                                     <td className="p-4 text-right text-muted-foreground">₹ {d.totalSales.toFixed(2)}</td>
                                     <td className="p-4 text-right text-muted-foreground">₹ {d.totalReceived.toFixed(2)}</td>
-                                    <td className="p-4 text-right font-bold">
-                                        {d.balance > 0 ? (
-                                            <span className="text-red-600">₹ {d.balance.toFixed(2)} (Due)</span>
-                                        ) : d.balance < 0 ? (
-                                            <span className="text-green-600">₹ {Math.abs(d.balance).toFixed(2)} (Adv)</span>
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
-                                        )}
+                                    <td className={`p-4 text-right font-bold ${d.balance > 0 ? "text-destructive" : "text-green-600"}`}>
+                                        ₹ {Number(d.balance).toFixed(2)}
                                     </td>
                                 </tr>
                             ))}
@@ -252,21 +229,27 @@ export default function LedgerPage() {
                 </div>
             )}
 
-            {/* ✅ PAYMENT MODAL */}
+            {/* ✅ PAYMENT MODAL with "Full Pay" Option */}
             {showPaymentModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-card w-full max-w-sm rounded-xl shadow-2xl border border-border p-6 animate-in fade-in zoom-in duration-200">
                         <div className="flex justify-between items-center mb-4 border-b border-border pb-3">
                             <div>
                                 <h3 className="text-lg font-bold text-foreground">Collect Payment</h3>
-                                <p className="text-xs text-muted-foreground">From: {paymentForm.customerName}</p>
+                                <p className="text-xs text-muted-foreground">From: <span className="font-semibold text-primary">{paymentForm.customerName}</span></p>
                             </div>
                             <button onClick={() => setShowPaymentModal(false)} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
                         </div>
                         
+                        {/* Current Due Display */}
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg mb-4 flex justify-between items-center">
+                            <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Total Pending:</span>
+                            <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">₹ {paymentForm.currentDue.toFixed(2)}</span>
+                        </div>
+
                         <div className="space-y-4">
                             <div>
-                                <label className="text-sm font-medium text-foreground">Amount (₹)</label>
+                                <label className="text-sm font-medium text-foreground">Amount to Pay</label>
                                 <div className="relative mt-1">
                                     <span className="absolute left-3 top-2 text-muted-foreground">₹</span>
                                     <input 
@@ -278,6 +261,15 @@ export default function LedgerPage() {
                                         placeholder="0.00"
                                     />
                                 </div>
+                                {/* ✅ Full Pay Button */}
+                                {paymentForm.currentDue > 0 && (
+                                    <button 
+                                        onClick={() => setPaymentForm({...paymentForm, amount: paymentForm.currentDue})}
+                                        className="mt-2 text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                                    >
+                                        <CheckCircle size={12} /> Click here to Full Pay (₹ {paymentForm.currentDue})
+                                    </button>
+                                )}
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-foreground">Payment Mode</label>
