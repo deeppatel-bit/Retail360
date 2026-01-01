@@ -18,15 +18,15 @@ export default function ProductForm({ onClose, onSave, initial }) {
   // Camera State
   const [showScanner, setShowScanner] = useState(false);
 
-  // Form State (Default empty strings for inputs)
+  // Form State
   const [form, setForm] = useState({
     name: "",
     barcode: "",
     category: "General",
     unit: "pcs",
-    stock: "",      // ✅ Empty default
-    costPrice: "",  // ✅ Empty default
-    sellPrice: "",  // ✅ Empty default
+    stock: "",      
+    costPrice: "",  
+    sellPrice: "",  
     gstPercent: 0, 
     reorder: 5,
   });
@@ -42,7 +42,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
       if (p) {
         setForm({
             ...p,
-            stock: p.stock !== undefined ? p.stock : "", // Keep empty if 0/undefined
+            stock: p.stock !== undefined ? p.stock : "", 
             costPrice: p.costPrice !== undefined ? p.costPrice : "",
             sellPrice: p.sellPrice !== undefined ? p.sellPrice : "",
             gstPercent: p.gstPercent || 0 
@@ -51,25 +51,42 @@ export default function ProductForm({ onClose, onSave, initial }) {
     }
   }, [initial, id, products]);
 
-  const isEdit = !!(initial || id);
+  const isEdit = !!(initial || id || form.id); // form.id check added specifically for scan case
 
-  // AUTO-FILL LOGIC
+  // ✅ NEW LOGIC: Scan to Increment Quantity
   const processBarcode = (code) => {
     if (!code) return;
 
+    // 1. Check if product exists in database
     const foundProduct = products.find(p => p.barcode === code);
 
     if (foundProduct) {
-      setForm({
-        ...foundProduct,
-        stock: "", // ✅ Clear stock so user types new stock
-        id: foundProduct.id, 
-        _id: undefined,
-        gstPercent: foundProduct.gstPercent || 0
-      });
-      toast.success(`Product found: ${foundProduct.name}. Enter new stock.`);
+      // Logic: જો પ્રોડક્ટ મળે તો Quantity વધારવી
+      
+      // ચેક કરો કે શું અત્યારે ફોર્મમાં આ જ પ્રોડક્ટ લોડ થયેલી છે?
+      if (form.id === foundProduct.id) {
+         // જો હા, તો ખાલી સ્ટોક વધારો (Increment existing input)
+         const currentStock = Number(form.stock) || 0;
+         setForm(prev => ({ ...prev, stock: currentStock + 1 }));
+         toast.success(`Stock incremented: ${currentStock + 1}`);
+      } else {
+         // જો ના (મતલબ નવી પ્રોડક્ટ સ્કેન કરી), તો પ્રોડક્ટ લોડ કરો અને સ્ટોક = જૂનો સ્ટોક + 1 કરો
+         const dbStock = Number(foundProduct.stock) || 0;
+         setForm({
+            ...foundProduct,
+            id: foundProduct.id,
+            _id: undefined, // Avoid conflict if using MongoDB _id
+            stock: dbStock + 1, // જૂનો સ્ટોક + 1
+            gstPercent: foundProduct.gstPercent || 0
+         });
+         toast.success(`Product found: ${foundProduct.name}. Stock updated to ${dbStock + 1}`);
+      }
+      
+      // ફોકસ સ્ટોક પર રાખો જેથી મેન્યુઅલી બદલવું હોય તો બદલી શકાય
       setTimeout(() => stockInputRef.current?.focus(), 100);
+
     } else {
+      // 2. New Product Logic (જો પ્રોડક્ટ ન મળે તો નવી એન્ટ્રી)
       setForm(prev => ({ 
           ...prev, 
           barcode: code,
@@ -79,7 +96,8 @@ export default function ProductForm({ onClose, onSave, initial }) {
           stock: "", 
           costPrice: "", 
           sellPrice: "", 
-          gstPercent: 0 
+          gstPercent: 0,
+          id: undefined // Clear ID implies new product
       }));
       toast.info("New Product detected! Please enter details.");
       setTimeout(() => nameInputRef.current?.focus(), 100);
@@ -91,6 +109,8 @@ export default function ProductForm({ onClose, onSave, initial }) {
       e.preventDefault();
       const code = e.target.value.trim();
       processBarcode(code);
+      // Optional: Clear input if you want to scan continuously without backspace
+      // but usually for form logic, we keep the barcode visible
     }
   };
 
@@ -104,7 +124,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
     if (!form.name || !form.name.trim()) newErrors.name = "Product name is required";
     if (!form.category || !form.category.trim()) newErrors.category = "Category is required";
     
-    // Convert back to number for validation
     if (Number(form.stock) < 0) newErrors.stock = "Stock cannot be negative";
     if (Number(form.costPrice) < 0) newErrors.costPrice = "Cost price cannot be negative";
     if (Number(form.sellPrice) < 0) newErrors.sellPrice = "Sell price cannot be negative";
@@ -114,7 +133,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
   };
 
   const change = (key, val) => {
-    // ✅ Keep as string to allow empty input and decimals
     setForm((s) => ({ ...s, [key]: val }));
     if (errors[key]) {
       setErrors((prev) => ({ ...prev, [key]: null }));
@@ -133,7 +151,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
         }
       }
 
-      // ✅ Convert to numbers before saving
       const finalForm = {
           ...form,
           stock: Number(form.stock) || 0,
@@ -169,7 +186,8 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-border">
           <h3 className="text-xl font-semibold text-foreground">
-            {form.id ? "Update Product" : "Add New Product"}
+            {/* Logic change to show Update if ID exists */}
+            {form.id ? "Update Product / Stock" : "Add New Product"}
           </h3>
           <button
             onClick={() => {
@@ -190,7 +208,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
                 <label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
-                    Scan Barcode First
+                    Scan to Add Stock
                 </label>
                 <div className="flex gap-2">
                     <input
@@ -199,7 +217,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
                         onChange={(e) => change("barcode", e.target.value)}
                         onKeyDown={handleInputScan}
                         className="flex-1 bg-transparent border-b border-indigo-300 outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50 focus:border-indigo-600"
-                        placeholder="Scan or type & hit Enter..."
+                        placeholder="Scan item..."
                         autoFocus
                     />
                     <button 
@@ -268,7 +286,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             {/* Stock */}
             <label className="block">
               <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">
-                 {form.id ? "Update Stock" : "Stock"}
+                 Stock (+1 on Scan)
               </div>
               <input
                 ref={stockInputRef}
@@ -342,7 +360,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Save className="w-5 h-5" />
-            {isEdit ? "Save Changes" : "Save Product"}
+            {isEdit ? "Update Stock / Product" : "Save Product"}
           </button>
         </div>
       </div>
