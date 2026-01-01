@@ -6,10 +6,13 @@ export const generateInvoice = (sale, storeSettings, products) => {
 
   const doc = new jsPDF();
 
-  // Helper to resolve product name
+  // --- Helper: Product Name શોધવા માટે ---
   const getProductName = (line) => {
+    // 1. જો લાઈનમાં જ નામ હોય
     if (line.product && line.product.name) return line.product.name;
     if (line.name) return line.name;
+    
+    // 2. Products લિસ્ટમાંથી ID દ્વારા શોધો
     if (products && line.productId) {
       const p = products.find(prod => prod.id === line.productId || prod._id === line.productId);
       if (p) return p.name;
@@ -17,29 +20,32 @@ export const generateInvoice = (sale, storeSettings, products) => {
     return "Item";
   };
 
-  // --- Colors & Fonts ---
-  const primaryColor = [30, 58, 138]; // #1e3a8a (Dark Blue)
-  const accentColor = [234, 179, 8];  // #EAB308 (Gold/Yellow)
+  // --- COLORS ---
+  const colorBlue = [30, 58, 138];   // Dark Blue (#1e3a8a) for Headers
+  const colorGold = [234, 179, 8];   // Gold (#EAB308) for Store Name
+  const colorGray = [80, 80, 80];    // Gray for text
+
+  // ==========================================
+  // 1. HEADER SECTION (Store Details)
+  // ==========================================
   
-  // --- 1. Header Section ---
-  // Store Name (Left)
-  doc.setTextColor(...accentColor);
-  doc.setFontSize(26);
-  doc.setFont("helvetica", "bold");
-  doc.text(storeSettings?.storeName || "MY STORE", 14, 22);
-
-  // Invoice Title (Right)
-  doc.setTextColor(...primaryColor);
+  // Store Name
   doc.setFontSize(24);
-  doc.text("INVOICE", 196, 22, { align: "right" });
+  doc.setTextColor(...colorGold);
+  doc.setFont("helvetica", "bold");
+  doc.text(storeSettings?.storeName?.toUpperCase() || "MY STORE", 14, 20);
 
-  // --- 2. Company Info & Invoice Details ---
-  doc.setTextColor(80);
+  // Invoice Title (Right side)
+  doc.setFontSize(20);
+  doc.setTextColor(...colorBlue);
+  doc.text("INVOICE", 196, 20, { align: "right" });
+
+  // Store Address & Contact (Left Side)
   doc.setFontSize(10);
+  doc.setTextColor(...colorGray);
   doc.setFont("helvetica", "normal");
-
-  // Store Address (Left)
-  let yPos = 30;
+  
+  let yPos = 28;
   if (storeSettings?.address) {
     doc.text(storeSettings.address, 14, yPos);
     yPos += 5;
@@ -52,64 +58,72 @@ export const generateInvoice = (sale, storeSettings, products) => {
     doc.text(`Email: ${storeSettings.email}`, 14, yPos);
     yPos += 5;
   }
+  if (storeSettings?.gst) {
+    doc.text(`GSTIN: ${storeSettings.gst}`, 14, yPos);
+  }
 
-  // Invoice Details Table (Right)
+  // Invoice Details Table (Right Side)
   autoTable(doc, {
     body: [
-      ["INVOICE NO", sale.saleId],
-      ["DATE", new Date(sale.date).toLocaleDateString()],
-      ["CUSTOMER ID", sale.customerId || "-"] // Assuming customerId might exist
+      ["Invoice No:", sale.saleId],
+      ["Date:", new Date(sale.date).toLocaleDateString("en-IN")],
+      ["Payment Mode:", sale.paymentMode || "Cash"]
     ],
-    startY: 30,
-    margin: { left: 130 },
+    startY: 25,
+    margin: { left: 120 }, // Push to right
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 1, textColor: 80 },
+    styles: { fontSize: 10, cellPadding: 1, textColor: 80, halign: 'right' },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: [...primaryColor], cellWidth: 35 },
-      1: { halign: 'right' }
+      0: { fontStyle: 'bold', textColor: [...colorBlue], cellWidth: 40 },
     }
   });
 
-  // --- 3. Bill To Section ---
-  const billToY = Math.max(yPos, doc.lastAutoTable.finalY) + 15;
-  
-  // Blue Header Bar for Bill To
-  doc.setFillColor(...primaryColor);
-  doc.rect(14, billToY, 90, 8, 'F');
+  // ==========================================
+  // 2. BILL TO SECTION (Customer)
+  // ==========================================
+  const billToY = Math.max(yPos, doc.lastAutoTable.finalY) + 12;
+
+  // Blue Bar Background
+  doc.setFillColor(...colorBlue);
+  doc.rect(14, billToY, 182, 8, 'F'); 
+
+  // "BILL TO" Text
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
   doc.text("BILL TO", 16, billToY + 5.5);
 
-  // Customer Details
+  // Customer Name & Details
   doc.setTextColor(0);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(sale.customerName || "Walk-in Customer", 14, billToY + 14);
-  // Add customer address/phone if available in sale object
-  if (sale.customerPhone) doc.text(`Phone: ${sale.customerPhone}`, 14, billToY + 19);
-
-  // --- 4. Items Table ---
-  const tableColumn = ["DESCRIPTION", "QTY", "UNIT PRICE", "DISCOUNT", "AMOUNT"];
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(sale.customerName || "Walk-in Customer", 14, billToY + 16);
+  
+  // ==========================================
+  // 3. ITEMS TABLE
+  // ==========================================
+  const tableColumn = ["#", "ITEM DESCRIPTION", "QTY", "PRICE", "DISC", "TOTAL"];
   const tableRows = [];
 
   if (sale.lines && Array.isArray(sale.lines)) {
-    sale.lines.forEach((line) => {
+    sale.lines.forEach((line, index) => {
       const pName = getProductName(line);
       const qty = Number(line.qty);
       const price = Number(line.price);
-      const discount = Number(line.discountPercent || 0); // Discount %
+      const discountPercent = Number(line.discountPercent || 0);
       
-      // Calculate Line Amount: Qty * Price - Discount
+      // Calculate Amounts
       const grossAmount = qty * price;
-      const discountAmount = (grossAmount * discount) / 100;
-      const netAmount = grossAmount - discountAmount;
+      const discAmount = (grossAmount * discountPercent) / 100;
+      const taxAmount = ((grossAmount - discAmount) * (line.taxPercent || 0)) / 100;
+      const netAmount = grossAmount - discAmount + taxAmount;
 
       const itemData = [
+        index + 1,
         pName,
         qty,
         price.toFixed(2),
-        discount > 0 ? `${discount}%` : "-",
+        discountPercent > 0 ? `${discountPercent}%` : "-",
         netAmount.toFixed(2),
       ];
       tableRows.push(itemData);
@@ -119,67 +133,80 @@ export const generateInvoice = (sale, storeSettings, products) => {
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: billToY + 25,
-    theme: 'striped',
+    startY: billToY + 22,
+    theme: 'striped', // Zebra stripes
     headStyles: { 
-      fillColor: [...primaryColor], 
+      fillColor: [...colorBlue], 
       textColor: 255, 
       fontStyle: 'bold',
-      halign: 'center' 
+      halign: 'center'
     },
-    styles: { fontSize: 10, cellPadding: 3 },
+    styles: { fontSize: 10, cellPadding: 3, valign: 'middle' },
     columnStyles: {
-      0: { halign: 'left' },   // Description
-      1: { halign: 'center' }, // Qty
-      2: { halign: 'right' },  // Unit Price
-      3: { halign: 'right' },  // Discount
-      4: { halign: 'right' }   // Amount
+      0: { halign: 'center', cellWidth: 12 }, // Index
+      1: { halign: 'left' },                  // Name
+      2: { halign: 'center' },                // Qty
+      3: { halign: 'right' },                 // Price
+      4: { halign: 'center' },                // Disc
+      5: { halign: 'right', fontStyle: 'bold' } // Total
     },
-    alternateRowStyles: { fillColor: [249, 250, 251] } // Light gray alternating rows
+    alternateRowStyles: { fillColor: [245, 247, 250] } // Light Gray rows
   });
 
-  // --- 5. Footer Summary ---
-  const finalY = doc.lastAutoTable.finalY + 10;
-  
-  // Summary Table (Right Aligned)
-  autoTable(doc, {
-    body: [
-      ["SUBTOTAL", (sale.total - (sale.tax || 0)).toFixed(2)],
-      ["TAX", `+${Number(sale.tax || 0).toFixed(2)}`],
-      ["TOTAL", Number(sale.total).toFixed(2)]
-    ],
-    startY: finalY,
-    margin: { left: 130 }, // Push to right
-    theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 2, textColor: 80 },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: [...primaryColor] },
-      1: { halign: 'right', fontStyle: 'normal' }
-    },
-    // Make TOTAL row bold/larger
-    didParseCell: function (data) {
-        if (data.row.index === 2) {
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fontSize = 12;
-            data.cell.styles.textColor = [...primaryColor];
-        }
-    }
-  });
+  // ==========================================
+  // 4. TOTALS & FOOTER
+  // ==========================================
+  const finalY = doc.lastAutoTable.finalY + 5;
 
-  // --- 6. Footer Notes & Thank You ---
-  const footerY = Math.max(finalY + 30, 270); // Ensure it's at bottom but not overlapping
-  
-  doc.setTextColor(...primaryColor);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("THANK YOU", 105, footerY, { align: "center" });
-  
+  // Notes on Left
   if (sale.notes) {
       doc.setFontSize(9);
       doc.setTextColor(100);
       doc.setFont("helvetica", "italic");
-      doc.text(`Note: ${sale.notes}`, 14, footerY + 10);
+      doc.text(`Note: ${sale.notes}`, 14, finalY + 10);
   }
+
+  // Totals Calculation Table (Right Side)
+  autoTable(doc, {
+    body: [
+      ["Subtotal:", `${Number(sale.total - (sale.balanceDue > 0 ? 0 : 0)).toFixed(2)}`], 
+      ["Paid Amount:", `${Number(sale.amountPaid).toFixed(2)}`],
+      ["Balance Due:", `${Number(sale.balanceDue).toFixed(2)}`],
+      ["GRAND TOTAL:", `Rs. ${Number(sale.total).toFixed(2)}`] // Bold Row
+    ],
+    startY: finalY,
+    margin: { left: 120 }, 
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 2, textColor: 80, halign: 'right' },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: [...colorBlue], cellWidth: 40 }, // Labels
+      1: { fontStyle: 'bold', textColor: 0 } // Values
+    },
+    didParseCell: function (data) {
+        // Balance Due RED if pending
+        if (data.row.index === 2 && sale.balanceDue > 0) {
+            data.cell.styles.textColor = [220, 38, 38];
+        }
+        // Grand Total Row Style
+        if (data.row.index === 3) {
+            data.cell.styles.fillColor = [...colorBlue];
+            data.cell.styles.textColor = [255, 255, 255];
+            data.cell.styles.fontSize = 11;
+        }
+    }
+  });
+
+  // Footer Line & Thank You
+  const pageHeight = doc.internal.pageSize.height;
+  
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(...colorBlue);
+  doc.line(14, pageHeight - 20, 196, pageHeight - 20); // Bottom Line
+
+  doc.setFontSize(10);
+  doc.setTextColor(...colorBlue);
+  doc.setFont("helvetica", "bold");
+  doc.text("THANK YOU FOR YOUR BUSINESS!", 105, pageHeight - 12, { align: "center" });
 
   // Save PDF
   doc.save(`Invoice_${sale.saleId}.pdf`);
