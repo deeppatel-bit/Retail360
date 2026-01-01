@@ -31,18 +31,13 @@ export default function SalesForm({ editMode }) {
       : new Date().toISOString().slice(0, 10)
   );
 
-  // ✅ Default empty strings for inputs
   const [lines, setLines] = useState(
     initial?.lines || [
       { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }
     ]
   );
 
-  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || "");
-  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || "");
   const [notes, setNotes] = useState(initial?.notes || "");
-  
-  // ✅ Amount Paid default empty
   const [amountPaid, setAmountPaid] = useState(
     initial?.amountPaid !== undefined ? initial.amountPaid : ""
   );
@@ -65,13 +60,13 @@ export default function SalesForm({ editMode }) {
       setAmountPaid(initial.amountPaid !== undefined ? initial.amountPaid : "");
       setPaymentMode(initial.paymentMode || "Cash");
     } 
-    // eslint-disable-next-line
   }, [initial, products]);
 
-  // MAIN SCAN LOGIC
+  // ✅ IMPROVED SCAN LOGIC
   const processScannedCode = (code) => {
     if (!code) return;
 
+    // 1. Find Product
     const product = products.find(
       (p) =>
         p.barcode === code || 
@@ -81,44 +76,68 @@ export default function SalesForm({ editMode }) {
 
     if (!product) {
       toast.error(`Product not found! (Code: ${code})`);
+      setBarcodeInput(""); 
       return;
     }
 
+    // 2. Global Stock Check
     if (Number(product.stock) <= 0) {
         toast.error(`Out of Stock! (${product.name})`);
+        setBarcodeInput("");
         return;
     }
 
+    // 3. Check if product exists in CURRENT sales lines
     const existingIndex = lines.findIndex((ln) => ln.productId === product.id);
 
     if (existingIndex >= 0) {
-      const currentQty = Number(lines[existingIndex].qty) || 0;
+      // --- SCENARIO: ITEM EXISTS -> INCREMENT QTY ---
+      const currentLine = lines[existingIndex];
+      const currentQty = Number(currentLine.qty) || 0;
+
+      // Check if adding 1 exceeds stock
       if (currentQty + 1 > product.stock) {
-          toast.error(`Not enough stock for ${product.name}!`);
+          toast.error(`Not enough stock for ${product.name}! Available: ${product.stock}`);
+          setBarcodeInput("");
           return;
       }
 
       const updatedLines = [...lines];
-      updatedLines[existingIndex].qty = currentQty + 1;
+      updatedLines[existingIndex] = {
+          ...currentLine,
+          qty: currentQty + 1
+      };
       setLines(updatedLines);
       toast.success(`Qty increased: ${product.name}`);
+
     } else {
+      // --- SCENARIO: NEW ITEM -> ADD ROW ---
+      
       const newLine = {
         productId: product.id,
         qty: 1,
         price: product.sellPrice,        
-        taxPercent: product.gstPercent || "", 
+        taxPercent: product.gstPercent || 0, 
         discountPercent: "",
       };
 
-      if (lines.length === 1 && !lines[0].productId) {
-        setLines([newLine]);
+      // Special Logic: If the *last line* is completely empty (no product selected),
+      // replace it instead of adding a new one.
+      const lastLineIndex = lines.length - 1;
+      const isLastLineEmpty = lines.length > 0 && !lines[lastLineIndex].productId;
+
+      if (isLastLineEmpty) {
+          const updatedLines = [...lines];
+          updatedLines[lastLineIndex] = newLine;
+          setLines(updatedLines);
       } else {
-        setLines((prev) => [...prev, newLine]);
+          setLines((prev) => [...prev, newLine]);
       }
+      
       toast.success(`${product.name} added!`);
     }
     
+    // Reset Input & Focus
     setBarcodeInput(""); 
     setTimeout(() => barcodeInputRef.current?.focus(), 100);
   };
@@ -211,7 +230,6 @@ export default function SalesForm({ editMode }) {
     
     const balanceDue = Math.max(0, total - finalAmountPaid);
 
-    // Clean up lines before sending
     const cleanLines = lines.map(ln => ({
         ...ln,
         qty: Number(ln.qty) || 0,
@@ -269,7 +287,7 @@ export default function SalesForm({ editMode }) {
             <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
             <div className="flex-1">
                 <label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
-                    Scan Barcode to Add Item
+                    Scan Barcode (Adds to Qty if exists)
                 </label>
                 <div className="flex gap-2">
                     <input
@@ -278,7 +296,7 @@ export default function SalesForm({ editMode }) {
                         onChange={(e) => setBarcodeInput(e.target.value)}
                         onKeyDown={handleInputScan}
                         className="flex-1 bg-transparent border-b border-indigo-300 outline-none text-lg font-medium text-foreground placeholder-muted-foreground/50 focus:border-indigo-600"
-                        placeholder="Scan product barcode & hit Enter..."
+                        placeholder="Scan product barcode..."
                         autoFocus
                     />
                     <button 
@@ -352,18 +370,18 @@ export default function SalesForm({ editMode }) {
                       <input 
                         type="number" 
                         value={ln.price} 
-                        onChange={(e) => changeLine(i, "price", e.target.value)} // ✅ Allow empty
+                        onChange={(e) => changeLine(i, "price", e.target.value)}
                         className="w-full border border-input px-2 py-1 rounded bg-background" 
-                        placeholder="0.00" // ✅ Placeholder
+                        placeholder="0.00"
                       />
                     </td>
                     <td className="px-4 py-2 relative">
                         <input 
                             type="number" 
                             value={ln.qty} 
-                            onChange={(e) => changeLine(i, "qty", e.target.value)} // ✅ Allow empty
+                            onChange={(e) => changeLine(i, "qty", e.target.value)}
                             className={`w-full border px-2 py-1 rounded bg-background ${isLowStock ? "border-destructive" : "border-input"}`} 
-                            placeholder="0" // ✅ Placeholder
+                            placeholder="0"
                         />
                         {isLowStock && <div className="absolute -top-4 left-0 text-[10px] text-destructive flex items-center"><AlertCircle size={10} className="mr-1"/> Low Stock</div>}
                     </td>
@@ -373,7 +391,7 @@ export default function SalesForm({ editMode }) {
                         value={ln.discountPercent} 
                         onChange={(e) => changeLine(i, "discountPercent", e.target.value)} 
                         className="w-full border border-input px-2 py-1 rounded bg-background" 
-                        placeholder="0" // ✅ Placeholder
+                        placeholder="0"
                       />
                     </td>
                     <td className="px-4 py-2">
@@ -382,7 +400,7 @@ export default function SalesForm({ editMode }) {
                         value={ln.taxPercent} 
                         onChange={(e) => changeLine(i, "taxPercent", e.target.value)} 
                         className="w-full border border-input px-2 py-1 rounded bg-background" 
-                        placeholder="0" // ✅ Placeholder
+                        placeholder="0"
                       />
                     </td>
                     <td className="px-4 py-2 text-right font-medium">
@@ -424,9 +442,9 @@ export default function SalesForm({ editMode }) {
               <input 
                 type="number" 
                 value={amountPaid} 
-                onChange={(e) => setAmountPaid(e.target.value)} // ✅ Allow empty
+                onChange={(e) => setAmountPaid(e.target.value)}
                 className="w-full border-input border px-4 py-2 rounded bg-background text-foreground" 
-                placeholder="0.00" // ✅ Placeholder
+                placeholder="0.00"
               />
             </div>
             <div className="flex items-center gap-2 pt-6">
