@@ -77,10 +77,10 @@ export default function ProductForm({ onClose, onSave, initial }) {
           name: "", 
           category: "General", 
           unit: "pcs", 
-          stock: "", 
-          costPrice: "", 
-          sellPrice: "", 
-          gstPercent: "" 
+          stock: "0.00", 
+          costPrice: "0.00", 
+          sellPrice: "0.00", 
+          gstPercent: "0.00" 
       }));
       toast.info("New Product detected! Please enter details.");
       // Focus on Name input
