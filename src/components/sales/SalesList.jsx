@@ -1,16 +1,18 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, Calendar, FileText, PackageX, Printer } from "lucide-react"; // ✅ Printer Icon ઉમેર્યું
+import { Search, Calendar, FileText, PackageX, Printer } from "lucide-react"; 
 import { useStore } from "../../context/StoreContext";
 import PaginationControls from "../common/PaginationControls";
 import TableHeader from "../common/TableHeader";
 import SearchableDropdown from "../common/SearchableDropdown";
-import { generateInvoice } from "../../utils/invoiceGenerator"; // ✅ Invoice Generator Import કર્યું
+import { generateInvoice } from "../../utils/invoiceGenerator"; 
 
 const ITEMS_PER_PAGE = 10;
 
 export default function SalesList() {
-  const { sales, deleteSale, settings } = useStore(); // ✅ settings પણ લાવ્યા (બિલમાં નામ બતાવવા)
+  // ✅ products ને destructure કરો
+  const { sales, deleteSale, settings, products } = useStore(); 
+  
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({
@@ -26,9 +28,12 @@ export default function SalesList() {
     setSortConfig({ key, direction });
   };
 
-  // ✅ Print Function
+  // ✅ Print Function માં products પાસ કરો
   const handlePrint = (sale) => {
-    generateInvoice(sale, settings);
+    // 1. sale: વેચાણનો ડેટા
+    // 2. settings: દુકાનનું નામ/એડ્રેસ
+    // 3. products: પ્રોડક્ટનું સાચું નામ શોધવા માટે
+    generateInvoice(sale, settings, products);
   };
 
   const [startDate, setStartDate] = useState("");
@@ -212,7 +217,7 @@ export default function SalesList() {
                   </td>
                   <td className="p-4 text-right space-x-3 flex justify-end items-center">
                     
-                    {/* ✅ NEW: Print Button */}
+                    {/* ✅ Print Button */}
                     <button
                         onClick={() => handlePrint(s)}
                         className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded transition-colors"
