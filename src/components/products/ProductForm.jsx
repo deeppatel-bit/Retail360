@@ -24,10 +24,9 @@ export default function ProductForm({ onClose, onSave, initial }) {
     barcode: "",
     category: "General",
     unit: "pcs",
-    stock: ,
-    costPrice: ,
-    sellPrice: ,
-    gstPercent: , // ✅ GST Field
+    costPrice: NULL,
+    sellPrice: NULL,
+    gstPercent: NULL, // ✅ GST Field
     reorder: 5,
   });
 
