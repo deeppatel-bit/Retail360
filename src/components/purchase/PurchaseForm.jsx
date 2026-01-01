@@ -3,16 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "../../context/ToastContext";
-
-/**
- Props:
-  - products: array
-  - suppliers: array
-  - onSave: function(payload) -> for add (if editMode true it receives (id,payload))
-  - editMode: optional boolean when route is edit
- Note: For edit route we expect parent to pass same component but with editMode and route param id.
-**/
-
 import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
 
@@ -22,7 +12,7 @@ export default function PurchaseForm({ editMode }) {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // If editMode, fetch existing purchase from localStorage
+  // If editMode, fetch existing purchase
   const [initial, setInitial] = useState(null);
 
   useEffect(() => {
@@ -30,18 +20,29 @@ export default function PurchaseForm({ editMode }) {
       const p = purchases.find((x) => x.purchaseId === id);
       if (p) setInitial(p);
     }
-  }, [editMode, id]);
+  }, [editMode, id, purchases]);
 
   const [supplierName, setSupplierName] = useState(initial?.supplierName || "");
   const [billNo, setBillNo] = useState(initial?.billNo || "");
-  const [date, setDate] = useState(initial ? new Date(initial.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
-  const [lines, setLines] = useState(initial?.lines || [{ productId: products[0]?.id || "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]);
-  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || 0);
-  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || 0);
+  const [date, setDate] = useState(
+    initial ? new Date(initial.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+
+  // ✅ Initialize lines with empty strings for editable fields
+  const [lines, setLines] = useState(
+    initial?.lines || [
+      { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }
+    ]
+  );
+
+  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || "");
+  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || "");
   const [notes, setNotes] = useState(initial?.notes || "");
 
-  // Payment State
-  const [amountPaid, setAmountPaid] = useState(initial?.amountPaid || 0);
+  // ✅ Payment State (Empty string default)
+  const [amountPaid, setAmountPaid] = useState(
+    initial?.amountPaid !== undefined ? initial.amountPaid : ""
+  );
   const [paymentMode, setPaymentMode] = useState(initial?.paymentMode || "Cash");
 
   useEffect(() => {
@@ -49,57 +50,66 @@ export default function PurchaseForm({ editMode }) {
       setSupplierName(initial.supplierName || "");
       setBillNo(initial.billNo || "");
       setDate(new Date(initial.date).toISOString().slice(0, 10));
-      // Ensure lines have price (cost price)
-      const loadedLines = (initial.lines || []).map(ln => ({
+      
+      const loadedLines = (initial.lines || []).map((ln) => ({
         ...ln,
-        price: ln.price !== undefined ? ln.price : (products.find(p => p.id === ln.productId)?.costPrice || 0),
-        taxPercent: ln.taxPercent || 0,
-        discountPercent: ln.discountPercent || 0
+        // Keep existing values or fetch from product, but convert 0 to "" if needed (optional, keeping as is for edit)
+        price: ln.price !== undefined ? ln.price : (products.find((p) => p.id === ln.productId)?.costPrice || ""),
+        qty: ln.qty || "",
+        taxPercent: ln.taxPercent || "",
+        discountPercent: ln.discountPercent || "",
       }));
-      setLines(loadedLines.length ? loadedLines : [{ productId: products[0]?.id || "", qty: 1, price: products[0]?.costPrice || 0, taxPercent: 0, discountPercent: 0 }]);
-      setTaxPercent(0); // Deprecated global
-      setDiscountPercent(0); // Deprecated global
+
+      setLines(loadedLines.length ? loadedLines : [{ productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }]);
       setNotes(initial.notes || "");
-      setAmountPaid(initial.amountPaid || 0);
+      setAmountPaid(initial.amountPaid !== undefined ? initial.amountPaid : "");
       setPaymentMode(initial.paymentMode || "Cash");
-    } else {
-      if (products.length && !lines[0].price) {
-        setLines([{ productId: products[0]?.id || "", qty: 1, price: products[0]?.costPrice || 0, taxPercent: 0, discountPercent: 0 }]);
-      }
-    }
+    } 
     // eslint-disable-next-line
   }, [initial, products]);
 
   function changeLine(i, key, val) {
-    setLines((s) => s.map((ln, idx) => {
-      if (idx !== i) return ln;
-      const newLn = { ...ln, [key]: val };
-      if (key === "productId") {
-        const p = products.find(x => x.id === val);
-        newLn.price = p ? p.costPrice : 0;
-      }
-      return newLn;
-    }));
+    setLines((s) =>
+      s.map((ln, idx) => {
+        if (idx !== i) return ln;
+        const newLn = { ...ln, [key]: val };
+        
+        // Auto-fill cost price when product selected
+        if (key === "productId") {
+          const p = products.find((x) => x.id === val);
+          newLn.price = p ? p.costPrice : ""; // Set default price
+        }
+        return newLn;
+      })
+    );
   }
+
   function addLine() {
-    setLines((s) => [...s, { productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]);
+    setLines((s) => [
+      ...s,
+      { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" },
+    ]);
   }
+
   function removeLine(idx) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
-  // Calculate totals based on lines
+  // Calculate totals (Using Number() to handle empty strings safely)
   let subtotal = 0;
   let totalDiscount = 0;
   let totalTax = 0;
   let totalQty = 0;
 
-  lines.forEach(ln => {
+  lines.forEach((ln) => {
     const qty = Number(ln.qty || 0);
     const price = Number(ln.price || 0);
+    const disc = Number(ln.discountPercent || 0);
+    const tax = Number(ln.taxPercent || 0);
+
     const lineAmount = qty * price;
-    const lineDisc = (lineAmount * Number(ln.discountPercent || 0)) / 100;
-    const lineTax = ((lineAmount - lineDisc) * Number(ln.taxPercent || 0)) / 100;
+    const lineDisc = (lineAmount * disc) / 100;
+    const lineTax = ((lineAmount - lineDisc) * tax) / 100;
 
     subtotal += lineAmount;
     totalDiscount += lineDisc;
@@ -116,28 +126,37 @@ export default function PurchaseForm({ editMode }) {
       if (!ln.productId) return toast.error("Choose product for each line");
     }
 
-    // Calculate Payment Status
+    // Convert empty strings to numbers before saving
+    const finalAmountPaid = Number(amountPaid) || 0;
+    
     let paymentStatus = "Unpaid";
-    if (Number(amountPaid) >= total) {
-      paymentStatus = "Paid";
-    } else if (Number(amountPaid) > 0) {
-      paymentStatus = "Partial";
-    }
-    const balanceDue = Math.max(0, total - Number(amountPaid));
+    if (finalAmountPaid >= total) paymentStatus = "Paid";
+    else if (finalAmountPaid > 0) paymentStatus = "Partial";
+    
+    const balanceDue = Math.max(0, total - finalAmountPaid);
+
+    const cleanLines = lines.map(ln => ({
+        ...ln,
+        qty: Number(ln.qty) || 0,
+        price: Number(ln.price) || 0,
+        discountPercent: Number(ln.discountPercent) || 0,
+        taxPercent: Number(ln.taxPercent) || 0
+    }));
 
     const payload = {
       supplierName,
       billNo,
       date: new Date(date).toISOString(),
-      lines,
-      taxPercent,
-      discountPercent,
+      lines: cleanLines,
+      taxPercent: 0, // Global fields deprecated
+      discountPercent: 0,
       notes,
-      amountPaid,
+      amountPaid: finalAmountPaid,
       paymentMode,
       paymentStatus,
-      balanceDue
+      balanceDue,
     };
+
     if (editMode && id) {
       updatePurchase(id, payload);
       toast.success("Purchase updated successfully");
@@ -155,7 +174,9 @@ export default function PurchaseForm({ editMode }) {
       className="space-y-6 max-w-5xl mx-auto"
     >
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-foreground">{editMode ? "Edit Purchase" : "Add Purchase"}</h2>
+        <h2 className="text-2xl font-bold text-foreground">
+          {editMode ? "Edit Purchase" : "Add Purchase"}
+        </h2>
       </div>
 
       <div className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
@@ -164,7 +185,7 @@ export default function PurchaseForm({ editMode }) {
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Supplier</label>
             <SearchableDropdown
-              options={suppliers.map(sup => ({ value: sup.name, label: sup.name }))}
+              options={suppliers.map((sup) => ({ value: sup.name, label: sup.name }))}
               value={supplierName}
               onChange={(val) => setSupplierName(val)}
               placeholder="Search or select supplier..."
@@ -208,12 +229,12 @@ export default function PurchaseForm({ editMode }) {
             <tbody className="divide-y divide-border">
               <AnimatePresence>
                 {lines.map((ln, i) => {
-                  const p = products.find(x => x.id === ln.productId);
+                  const p = products.find((x) => x.id === ln.productId);
                   const stock = p ? p.stock : 0;
-                  const subtotalLine = (Number(ln.qty || 0) * Number(ln.price || 0)).toFixed(2);
+                  
                   return (
                     <motion.tr
-                      key={i} // Note: using index as key is not ideal for animations if reordering, but fine for append/delete
+                      key={i}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
@@ -221,7 +242,10 @@ export default function PurchaseForm({ editMode }) {
                     >
                       <td className="px-4 py-2">
                         <SearchableDropdown
-                          options={products.map(p => ({ value: p.id, label: `${p.name} (${p.unit})` }))}
+                          options={products.map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (${p.unit})`,
+                          }))}
                           value={ln.productId}
                           onChange={(val) => changeLine(i, "productId", val)}
                           placeholder="Search product..."
@@ -234,41 +258,49 @@ export default function PurchaseForm({ editMode }) {
                         <input
                           type="number"
                           value={ln.price}
-                          onChange={(e) => changeLine(i, "price", Number(e.target.value))}
+                          onChange={(e) => changeLine(i, "price", e.target.value)} // ✅ Allow empty string
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
                           step="0.01"
+                          placeholder="0.00" // ✅ Placeholder added
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.qty}
-                          onChange={(e) => changeLine(i, "qty", Number(e.target.value))}
+                          onChange={(e) => changeLine(i, "qty", e.target.value)} // ✅ Allow empty string
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="1"
+                          placeholder="0" // ✅ Placeholder added
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.discountPercent}
-                          onChange={(e) => changeLine(i, "discountPercent", Number(e.target.value))}
+                          onChange={(e) => changeLine(i, "discountPercent", e.target.value)} // ✅ Allow empty string
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
+                          placeholder="0" // ✅ Placeholder added
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.taxPercent}
-                          onChange={(e) => changeLine(i, "taxPercent", Number(e.target.value))}
+                          onChange={(e) => changeLine(i, "taxPercent", e.target.value)} // ✅ Allow empty string
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
+                          placeholder="0" // ✅ Placeholder added
                         />
                       </td>
                       <td className="px-4 py-2 text-right font-medium text-foreground">
-                        ₹ {((Number(ln.qty || 0) * Number(ln.price || 0)) - ((Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100) + (((Number(ln.qty || 0) * Number(ln.price || 0)) - ((Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100)) * Number(ln.taxPercent || 0) / 100)).toFixed(2)}
+                        ₹ {((Number(ln.qty || 0) * Number(ln.price || 0)) -
+                          (Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100 +
+                          ((Number(ln.qty || 0) * Number(ln.price || 0)) -
+                            (Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100) *
+                            Number(ln.taxPercent || 0) / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-2 text-center">
                         <button
@@ -285,7 +317,7 @@ export default function PurchaseForm({ editMode }) {
               </AnimatePresence>
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan="8" className="px-4 py-8 text-center text-muted-foreground">
                     No items added. Click "Add Item" to start.
                   </td>
                 </tr>
@@ -308,7 +340,6 @@ export default function PurchaseForm({ editMode }) {
         {/* Footer Totals */}
         <div className="flex flex-col md:flex-row justify-end items-start md:items-center gap-8 pt-4 border-t border-border">
           <div className="w-full md:w-64 space-y-3">
-            {/* Global Tax/Discount removed in favor of item-wise */}
             <div>
               <label className="block text-sm text-muted-foreground mb-1">Notes</label>
               <input
@@ -342,7 +373,9 @@ export default function PurchaseForm({ editMode }) {
 
         {/* Payment Details Section */}
         <div className="bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-lg border border-emerald-100 dark:border-emerald-500/20">
-          <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-300 mb-3">Payment Details</h3>
+          <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-300 mb-3">
+            Payment Details
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Payment Mode</label>
@@ -365,8 +398,9 @@ export default function PurchaseForm({ editMode }) {
                 <input
                   type="number"
                   value={amountPaid}
-                  onChange={(e) => setAmountPaid(Number(e.target.value))}
+                  onChange={(e) => setAmountPaid(e.target.value)} // ✅ Allow empty string
                   className="w-full border-input border pl-8 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
+                  placeholder="0.00" // ✅ Placeholder added
                 />
               </div>
             </div>
@@ -386,7 +420,7 @@ export default function PurchaseForm({ editMode }) {
             </div>
           </div>
           <div className="mt-2 text-right text-sm font-medium text-muted-foreground">
-            Balance Due: <span className="text-destructive">₹ {Math.max(0, total - amountPaid).toFixed(2)}</span>
+            Balance Due: <span className="text-destructive">₹ {Math.max(0, total - (Number(amountPaid)||0)).toFixed(2)}</span>
           </div>
         </div>
 

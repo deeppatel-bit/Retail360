@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertCircle, ScanBarcode, Camera } from "lucide-react"; // ✅ Camera Icon
+import { Plus, Trash2, AlertCircle, ScanBarcode, Camera } from "lucide-react"; 
 import { useToast } from "../../context/ToastContext";
 import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
-import BarcodeScanner from "../common/BarcodeScanner"; // ✅ Scanner Import
+import BarcodeScanner from "../common/BarcodeScanner"; 
 
 export default function SalesForm({ editMode }) {
   const { products, addSale, updateSale, sales, ledgers, addLedger } = useStore();
@@ -13,8 +13,8 @@ export default function SalesForm({ editMode }) {
   const toast = useToast();
 
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [showScanner, setShowScanner] = useState(false); // ✅ Scanner State
-  const barcodeInputRef = useRef(null); // Ref for focus
+  const [showScanner, setShowScanner] = useState(false); 
+  const barcodeInputRef = useRef(null); 
 
   const [initial, setInitial] = useState(null);
   useEffect(() => {
@@ -31,14 +31,21 @@ export default function SalesForm({ editMode }) {
       : new Date().toISOString().slice(0, 10)
   );
 
+  // ✅ Default empty strings for inputs
   const [lines, setLines] = useState(
-    initial?.lines || [{ productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 }]
+    initial?.lines || [
+      { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }
+    ]
   );
 
-  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || 0);
-  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || 0);
+  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || "");
+  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || "");
   const [notes, setNotes] = useState(initial?.notes || "");
-  const [amountPaid, setAmountPaid] = useState(initial?.amountPaid || 0);
+  
+  // ✅ Amount Paid default empty
+  const [amountPaid, setAmountPaid] = useState(
+    initial?.amountPaid !== undefined ? initial.amountPaid : ""
+  );
   const [paymentMode, setPaymentMode] = useState(initial?.paymentMode || "Cash");
 
   useEffect(() => {
@@ -48,25 +55,23 @@ export default function SalesForm({ editMode }) {
       
       const loadedLines = (initial.lines || []).map((ln) => ({
         ...ln,
-        price: ln.price !== undefined
-            ? ln.price
-            : products.find((p) => p.id === ln.productId)?.sellPrice || 0,
-        taxPercent: ln.taxPercent || 0,
-        discountPercent: ln.discountPercent || 0,
+        price: ln.price !== undefined ? ln.price : (products.find((p) => p.id === ln.productId)?.sellPrice || ""),
+        qty: ln.qty || "",
+        taxPercent: ln.taxPercent || "",
+        discountPercent: ln.discountPercent || "",
       }));
-      setLines(loadedLines);
+      setLines(loadedLines.length ? loadedLines : [{ productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }]);
       setNotes(initial.notes || "");
-      setAmountPaid(initial.amountPaid || 0);
+      setAmountPaid(initial.amountPaid !== undefined ? initial.amountPaid : "");
       setPaymentMode(initial.paymentMode || "Cash");
     } 
     // eslint-disable-next-line
   }, [initial, products]);
 
-  // ✅ MAIN SCAN LOGIC (Camera & Input Both use this)
+  // MAIN SCAN LOGIC
   const processScannedCode = (code) => {
     if (!code) return;
 
-    // 1. પ્રોડક્ટ શોધો (Barcode, ID અથવા Name થી)
     const product = products.find(
       (p) =>
         p.barcode === code || 
@@ -79,38 +84,33 @@ export default function SalesForm({ editMode }) {
       return;
     }
 
-    // 2. સ્ટોક વેલિડેશન (Stock Validation)
     if (Number(product.stock) <= 0) {
         toast.error(`Out of Stock! (${product.name})`);
         return;
     }
 
-    // 3. ચેક કરો કે લિસ્ટમાં પહેલાથી છે કે નહીં
     const existingIndex = lines.findIndex((ln) => ln.productId === product.id);
 
     if (existingIndex >= 0) {
-      // જો હોય, તો Qty વધારો (પણ સ્ટોક કરતા વધવી ન જોઈએ)
-      const currentQty = lines[existingIndex].qty;
+      const currentQty = Number(lines[existingIndex].qty) || 0;
       if (currentQty + 1 > product.stock) {
           toast.error(`Not enough stock for ${product.name}!`);
           return;
       }
 
       const updatedLines = [...lines];
-      updatedLines[existingIndex].qty += 1;
+      updatedLines[existingIndex].qty = currentQty + 1;
       setLines(updatedLines);
       toast.success(`Qty increased: ${product.name}`);
     } else {
-      // 4. જો ન હોય, તો નવી લાઈન એડ કરો (Auto-fill details)
       const newLine = {
         productId: product.id,
         qty: 1,
-        price: product.sellPrice,        // Auto Price
-        taxPercent: product.gstPercent || 0, // Auto GST
-        discountPercent: 0,
+        price: product.sellPrice,        
+        taxPercent: product.gstPercent || "", 
+        discountPercent: "",
       };
 
-      // જો પહેલી લાઈન ખાલી હોય તો તેમાં જ ભરો, નહીંતર નવી લાઈન બનાવો
       if (lines.length === 1 && !lines[0].productId) {
         setLines([newLine]);
       } else {
@@ -119,12 +119,10 @@ export default function SalesForm({ editMode }) {
       toast.success(`${product.name} added!`);
     }
     
-    setBarcodeInput(""); // Clear input
-    // Focus back on input after scan
+    setBarcodeInput(""); 
     setTimeout(() => barcodeInputRef.current?.focus(), 100);
   };
 
-  // Handle Manual Input (Enter Key)
   const handleInputScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -132,13 +130,11 @@ export default function SalesForm({ editMode }) {
     }
   };
 
-  // ✅ Handle Camera Scan
   const handleCameraScan = (code) => {
-    setShowScanner(false); // Close camera
-    processScannedCode(code); // Process code
+    setShowScanner(false); 
+    processScannedCode(code); 
   };
 
-  // Handle Dropdown Change
   function changeLine(i, key, val) {
     setLines((s) =>
       s.map((ln, idx) => {
@@ -149,10 +145,10 @@ export default function SalesForm({ editMode }) {
           const p = products.find((x) => x.id === val);
           if (p) {
              newLn.price = p.sellPrice;
-             newLn.taxPercent = p.gstPercent || 0;
+             newLn.taxPercent = p.gstPercent || "";
           } else {
-             newLn.price = 0;
-             newLn.taxPercent = 0;
+             newLn.price = "";
+             newLn.taxPercent = "";
           }
         }
         return newLn;
@@ -163,7 +159,7 @@ export default function SalesForm({ editMode }) {
   function addLine() {
     setLines((s) => [
       ...s,
-      { productId: "", qty: 1, price: 0, taxPercent: 0, discountPercent: 0 },
+      { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" },
     ]);
   }
 
@@ -171,6 +167,7 @@ export default function SalesForm({ editMode }) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
+  // Calculate Totals safely
   let subtotal = 0;
   let totalDiscount = 0;
   let totalTax = 0;
@@ -179,9 +176,12 @@ export default function SalesForm({ editMode }) {
   lines.forEach((ln) => {
     const qty = Number(ln.qty || 0);
     const price = Number(ln.price || 0);
+    const disc = Number(ln.discountPercent || 0);
+    const tax = Number(ln.taxPercent || 0);
+
     const lineAmount = qty * price;
-    const lineDisc = (lineAmount * Number(ln.discountPercent || 0)) / 100;
-    const lineTax = ((lineAmount - lineDisc) * Number(ln.taxPercent || 0)) / 100;
+    const lineDisc = (lineAmount * disc) / 100;
+    const lineTax = ((lineAmount - lineDisc) * tax) / 100;
 
     subtotal += lineAmount;
     totalDiscount += lineDisc;
@@ -203,20 +203,31 @@ export default function SalesForm({ editMode }) {
         try { await addLedger({ name: customerName, type: "Customer" }); } catch (e) {}
     }
 
+    const finalAmountPaid = Number(amountPaid) || 0;
+
     let paymentStatus = "Unpaid";
-    if (Number(amountPaid) >= total) paymentStatus = "Paid";
-    else if (Number(amountPaid) > 0) paymentStatus = "Partial";
+    if (finalAmountPaid >= total) paymentStatus = "Paid";
+    else if (finalAmountPaid > 0) paymentStatus = "Partial";
     
-    const balanceDue = Math.max(0, total - Number(amountPaid));
+    const balanceDue = Math.max(0, total - finalAmountPaid);
+
+    // Clean up lines before sending
+    const cleanLines = lines.map(ln => ({
+        ...ln,
+        qty: Number(ln.qty) || 0,
+        price: Number(ln.price) || 0,
+        discountPercent: Number(ln.discountPercent) || 0,
+        taxPercent: Number(ln.taxPercent) || 0
+    }));
 
     const payload = {
       customerName,
       date: new Date(date).toISOString(),
-      lines,
-      taxPercent,
-      discountPercent,
+      lines: cleanLines,
+      taxPercent: 0,
+      discountPercent: 0,
       notes,
-      amountPaid,
+      amountPaid: finalAmountPaid,
       paymentMode,
       paymentStatus,
       balanceDue,
@@ -238,7 +249,6 @@ export default function SalesForm({ editMode }) {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       
-      {/* ✅ CAMERA MODAL */}
       {showScanner && (
         <BarcodeScanner 
           onScanSuccess={handleCameraScan} 
@@ -254,7 +264,7 @@ export default function SalesForm({ editMode }) {
 
       <div className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
         
-        {/* ✅ BARCODE SCANNER SECTION WITH CAMERA BUTTON */}
+        {/* BARCODE SCANNER */}
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-4">
             <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
             <div className="flex-1">
@@ -271,7 +281,6 @@ export default function SalesForm({ editMode }) {
                         placeholder="Scan product barcode & hit Enter..."
                         autoFocus
                     />
-                    {/* ✅ Camera Button */}
                     <button 
                         onClick={() => setShowScanner(true)}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
@@ -283,7 +292,7 @@ export default function SalesForm({ editMode }) {
             </div>
         </div>
 
-        {/* Customer & Date Info */}
+        {/* Customer & Date */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Customer Name</label>
@@ -324,7 +333,7 @@ export default function SalesForm({ editMode }) {
               {lines.map((ln, i) => {
                 const p = products.find((x) => x.id === ln.productId);
                 const stock = p ? p.stock : 0;
-                const isLowStock = p && stock < Number(ln.qty);
+                const isLowStock = p && stock < (Number(ln.qty)||0);
 
                 return (
                   <tr key={i} className="hover:bg-accent/50">
@@ -340,17 +349,41 @@ export default function SalesForm({ editMode }) {
                       {p ? <span className={stock === 0 ? "text-destructive font-bold" : "text-muted-foreground"}>{stock} {p.unit}</span> : "-"}
                     </td>
                     <td className="px-4 py-2">
-                      <input type="number" value={ln.price} onChange={(e) => changeLine(i, "price", Number(e.target.value))} className="w-full border border-input px-2 py-1 rounded bg-background" />
+                      <input 
+                        type="number" 
+                        value={ln.price} 
+                        onChange={(e) => changeLine(i, "price", e.target.value)} // ✅ Allow empty
+                        className="w-full border border-input px-2 py-1 rounded bg-background" 
+                        placeholder="0.00" // ✅ Placeholder
+                      />
                     </td>
                     <td className="px-4 py-2 relative">
-                        <input type="number" value={ln.qty} onChange={(e) => changeLine(i, "qty", Number(e.target.value))} className={`w-full border px-2 py-1 rounded bg-background ${isLowStock ? "border-destructive" : "border-input"}`} />
+                        <input 
+                            type="number" 
+                            value={ln.qty} 
+                            onChange={(e) => changeLine(i, "qty", e.target.value)} // ✅ Allow empty
+                            className={`w-full border px-2 py-1 rounded bg-background ${isLowStock ? "border-destructive" : "border-input"}`} 
+                            placeholder="0" // ✅ Placeholder
+                        />
                         {isLowStock && <div className="absolute -top-4 left-0 text-[10px] text-destructive flex items-center"><AlertCircle size={10} className="mr-1"/> Low Stock</div>}
                     </td>
                     <td className="px-4 py-2">
-                      <input type="number" value={ln.discountPercent} onChange={(e) => changeLine(i, "discountPercent", Number(e.target.value))} className="w-full border border-input px-2 py-1 rounded bg-background" />
+                      <input 
+                        type="number" 
+                        value={ln.discountPercent} 
+                        onChange={(e) => changeLine(i, "discountPercent", e.target.value)} 
+                        className="w-full border border-input px-2 py-1 rounded bg-background" 
+                        placeholder="0" // ✅ Placeholder
+                      />
                     </td>
                     <td className="px-4 py-2">
-                      <input type="number" value={ln.taxPercent} onChange={(e) => changeLine(i, "taxPercent", Number(e.target.value))} className="w-full border border-input px-2 py-1 rounded bg-background" />
+                      <input 
+                        type="number" 
+                        value={ln.taxPercent} 
+                        onChange={(e) => changeLine(i, "taxPercent", e.target.value)} 
+                        className="w-full border border-input px-2 py-1 rounded bg-background" 
+                        placeholder="0" // ✅ Placeholder
+                      />
                     </td>
                     <td className="px-4 py-2 text-right font-medium">
                       ₹ {(Number(ln.qty||0)*Number(ln.price||0) - (Number(ln.qty||0)*Number(ln.price||0)*Number(ln.discountPercent||0))/100 + ((Number(ln.qty||0)*Number(ln.price||0) - (Number(ln.qty||0)*Number(ln.price||0)*Number(ln.discountPercent||0))/100)*Number(ln.taxPercent||0))/100).toFixed(2)}
@@ -388,7 +421,13 @@ export default function SalesForm({ editMode }) {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Amount Paid</label>
-              <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(Number(e.target.value))} className="w-full border-input border px-4 py-2 rounded bg-background text-foreground" />
+              <input 
+                type="number" 
+                value={amountPaid} 
+                onChange={(e) => setAmountPaid(e.target.value)} // ✅ Allow empty
+                className="w-full border-input border px-4 py-2 rounded bg-background text-foreground" 
+                placeholder="0.00" // ✅ Placeholder
+              />
             </div>
             <div className="flex items-center gap-2 pt-6">
               <button onClick={() => setAmountPaid(total)} className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">Full Paid</button>
