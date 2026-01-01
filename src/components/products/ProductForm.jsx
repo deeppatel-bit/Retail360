@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X, Save, ScanBarcode, Camera } from "lucide-react"; // ✅ Camera Icon Added
+import { X, Save, ScanBarcode, Camera } from "lucide-react"; 
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
-import BarcodeScanner from "../common/BarcodeScanner"; // ✅ Scanner Import
+import BarcodeScanner from "../common/BarcodeScanner"; 
 
 export default function ProductForm({ onClose, onSave, initial }) {
   const { addOrUpdateProduct, products } = useStore();
@@ -15,19 +15,19 @@ export default function ProductForm({ onClose, onSave, initial }) {
   const nameInputRef = useRef(null);
   const barcodeInputRef = useRef(null);
 
-  // ✅ Camera State
+  // Camera State
   const [showScanner, setShowScanner] = useState(false);
 
-  // Form State
+  // Form State (Default empty strings for inputs)
   const [form, setForm] = useState({
     name: "",
     barcode: "",
     category: "General",
     unit: "pcs",
-    stock: "",
-    costPrice: "",
-    sellPrice: "",
-    gstPercent: "", // ✅ GST Field
+    stock: "",      // ✅ Empty default
+    costPrice: "",  // ✅ Empty default
+    sellPrice: "",  // ✅ Empty default
+    gstPercent: 0, 
     reorder: 5,
   });
 
@@ -42,7 +42,10 @@ export default function ProductForm({ onClose, onSave, initial }) {
       if (p) {
         setForm({
             ...p,
-            gstPercent: p.gstPercent || 0 // Load existing GST or default to 0
+            stock: p.stock !== undefined ? p.stock : "", // Keep empty if 0/undefined
+            costPrice: p.costPrice !== undefined ? p.costPrice : "",
+            sellPrice: p.sellPrice !== undefined ? p.sellPrice : "",
+            gstPercent: p.gstPercent || 0 
         });
       }
     }
@@ -50,45 +53,39 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const isEdit = !!(initial || id);
 
-  // ✅ AUTO-FILL LOGIC: Common Logic for Finding Product (Scanner & Input both use this)
+  // AUTO-FILL LOGIC
   const processBarcode = (code) => {
     if (!code) return;
 
-    // Find product in database
     const foundProduct = products.find(p => p.barcode === code);
 
     if (foundProduct) {
-      // 1. Existing Product Found: Auto-fill details
       setForm({
         ...foundProduct,
-        stock: 0, // Reset stock to 0 for adding NEW stock
-        id: foundProduct.id, // Keep ID to update existing product
+        stock: "", // ✅ Clear stock so user types new stock
+        id: foundProduct.id, 
         _id: undefined,
         gstPercent: foundProduct.gstPercent || 0
       });
       toast.success(`Product found: ${foundProduct.name}. Enter new stock.`);
-      // Focus on Stock input
       setTimeout(() => stockInputRef.current?.focus(), 100);
     } else {
-      // 2. New Product
       setForm(prev => ({ 
           ...prev, 
           barcode: code,
           name: "", 
           category: "General", 
           unit: "pcs", 
-          stock: "0.00", 
-          costPrice: "0.00", 
-          sellPrice: "0.00", 
-          gstPercent: "0.00" 
+          stock: "", 
+          costPrice: "", 
+          sellPrice: "", 
+          gstPercent: 0 
       }));
       toast.info("New Product detected! Please enter details.");
-      // Focus on Name input
       setTimeout(() => nameInputRef.current?.focus(), 100);
     }
   };
 
-  // ✅ Keyboard Input Handler
   const handleInputScan = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -97,25 +94,27 @@ export default function ProductForm({ onClose, onSave, initial }) {
     }
   };
 
-  // ✅ Camera Scan Handler
   const handleCameraScan = (code) => {
-    setShowScanner(false); // Close camera modal
-    processBarcode(code);  // Process the scanned code
+    setShowScanner(false); 
+    processBarcode(code);  
   };
 
   const validate = () => {
     const newErrors = {};
     if (!form.name || !form.name.trim()) newErrors.name = "Product name is required";
     if (!form.category || !form.category.trim()) newErrors.category = "Category is required";
-    if (form.stock < 0) newErrors.stock = "Stock cannot be negative";
-    if (form.costPrice < 0) newErrors.costPrice = "Cost price cannot be negative";
-    if (form.sellPrice < 0) newErrors.sellPrice = "Sell price cannot be negative";
+    
+    // Convert back to number for validation
+    if (Number(form.stock) < 0) newErrors.stock = "Stock cannot be negative";
+    if (Number(form.costPrice) < 0) newErrors.costPrice = "Cost price cannot be negative";
+    if (Number(form.sellPrice) < 0) newErrors.sellPrice = "Sell price cannot be negative";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const change = (key, val) => {
+    // ✅ Keep as string to allow empty input and decimals
     setForm((s) => ({ ...s, [key]: val }));
     if (errors[key]) {
       setErrors((prev) => ({ ...prev, [key]: null }));
@@ -124,27 +123,23 @@ export default function ProductForm({ onClose, onSave, initial }) {
 
   const handleSubmit = () => {
     if (validate()) {
-      // Duplicate Check (only for new products creation, not updates)
       if (!form.id && products) {
         const exists = products.find(
           (p) => p.name.toLowerCase().trim() === form.name.toLowerCase().trim()
         );
-
         if (exists && exists.barcode !== form.barcode) {
           toast.error("Product name already exists with a different barcode!");
           return;
         }
       }
 
-      // Stock Calculation Logic
-      let finalForm = { ...form };
-      if (form.id) {
-          
-          const oldProduct = products.find(p => p.id === form.id);
-          if (oldProduct) {
-            
-          }
-      }
+      // ✅ Convert to numbers before saving
+      const finalForm = {
+          ...form,
+          stock: Number(form.stock) || 0,
+          costPrice: Number(form.costPrice) || 0,
+          sellPrice: Number(form.sellPrice) || 0
+      };
 
       if (onSave) {
         onSave(finalForm);
@@ -162,7 +157,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       
-      {/*  Show Scanner Modal if active */}
       {showScanner && (
         <BarcodeScanner 
           onScanSuccess={handleCameraScan} 
@@ -191,7 +185,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Body */}
         <div className="p-6 space-y-4">
           
-          {/*  SCANNER INPUT SECTION */}
+          {/* Scanner Input */}
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
@@ -208,7 +202,6 @@ export default function ProductForm({ onClose, onSave, initial }) {
                         placeholder="Scan or type & hit Enter..."
                         autoFocus
                     />
-                    {/* Camera Button */}
                     <button 
                         onClick={() => setShowScanner(true)}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -223,7 +216,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
           <label className="block">
             <div className="text-sm font-medium text-foreground mb-1">Product Name</div>
             <input
-              ref={nameInputRef} // Added ref
+              ref={nameInputRef}
               value={form.name}
               onChange={(e) => change("name", e.target.value)}
               className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
@@ -266,24 +259,26 @@ export default function ProductForm({ onClose, onSave, initial }) {
               <input
                 type="number"
                 value={form.costPrice}
-                onChange={(e) => change("costPrice", Number(e.target.value))}
+                onChange={(e) => change("costPrice", e.target.value)}
                 className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="0.00"
               />
             </label>
 
-            {/* Stock with Ref */}
+            {/* Stock */}
             <label className="block">
               <div className="text-sm text-foreground mb-1 font-bold text-indigo-600">
                  {form.id ? "Update Stock" : "Stock"}
               </div>
               <input
-                ref={stockInputRef} // Added ref
+                ref={stockInputRef}
                 type="number"
                 value={form.stock}
-                onChange={(e) => change("stock", Number(e.target.value))}
+                onChange={(e) => change("stock", e.target.value)}
                 className={`w-full border px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50 ${
                   errors.stock ? "border-destructive" : "border-input"
                 }`}
+                placeholder="0" 
               />
             </label>
 
@@ -293,13 +288,14 @@ export default function ProductForm({ onClose, onSave, initial }) {
               <input
                 type="number"
                 value={form.sellPrice}
-                onChange={(e) => change("sellPrice", Number(e.target.value))}
+                onChange={(e) => change("sellPrice", e.target.value)}
                 className="w-full border border-input px-3 py-2 rounded-lg bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="0.00"
               />
             </label>
           </div>
 
-          {/*  New Row: GST Selection & Reorder Point */}
+          {/* GST Selection & Reorder Point */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block">
                 <div className="text-sm font-medium text-foreground mb-1">GST %</div>
