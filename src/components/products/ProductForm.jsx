@@ -24,10 +24,10 @@ export default function ProductForm({ onClose, onSave, initial }) {
     barcode: "",
     category: "General",
     unit: "pcs",
-    stock: 0,
-    costPrice: 0,
-    sellPrice: 0,
-    gstPercent: 0, // ✅ GST Field
+    stock: "",
+    costPrice: "",
+    sellPrice: "",
+    gstPercent: "", // ✅ GST Field
     reorder: 5,
   });
 
@@ -77,10 +77,10 @@ export default function ProductForm({ onClose, onSave, initial }) {
           name: "", 
           category: "General", 
           unit: "pcs", 
-          stock: 0, 
-          costPrice: 0, 
-          sellPrice: 0, 
-          gstPercent: 0 
+          stock: "", 
+          costPrice: "", 
+          sellPrice: "", 
+          gstPercent: "" 
       }));
       toast.info("New Product detected! Please enter details.");
       // Focus on Name input
@@ -139,29 +139,13 @@ export default function ProductForm({ onClose, onSave, initial }) {
       // Stock Calculation Logic
       let finalForm = { ...form };
       if (form.id) {
-          // If updating, add new stock to existing stock (simple logic)
-          // Or if you want to overwrite, just send 'form' as is. 
-          // Here we assume user entered quantity to ADD.
+          
           const oldProduct = products.find(p => p.id === form.id);
           if (oldProduct) {
-              // Be careful: if user edits name/price but keeps stock 0, this adds 0.
-              // If user enters 10, it adds 10 to old stock.
-              // For a simple 'Update' form, usually we overwrite. 
-              // BUT for a 'Stock Entry' flow, we add. 
-              // Let's assume OVERWRITE for simplicity unless scanning found it.
-              
-              // If this was found via scan (stock was reset to 0), we might want to ADD.
-              // To keep it simple for now: We save whatever is in the form.
-              // If you want "Add to existing", you'd need:
-              // finalForm.stock = Number(oldProduct.stock) + Number(form.stock);
+            
           }
       }
 
-      // For this specific request ("auto details fill"), usually implies adding stock.
-      // Let's stick to standard "Update" logic (Overwrite) to avoid confusion, 
-      // UNLESS you specifically want an "Add Stock" feature.
-      // Based on your previous prompt, let's keep it simple: Save exactly what's in the form.
-      
       if (onSave) {
         onSave(finalForm);
       } else {
@@ -178,7 +162,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       
-      {/* ✅ Show Scanner Modal if active */}
+      {/*  Show Scanner Modal if active */}
       {showScanner && (
         <BarcodeScanner 
           onScanSuccess={handleCameraScan} 
@@ -207,7 +191,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
         {/* Body */}
         <div className="p-6 space-y-4">
           
-          {/* ✅ SCANNER INPUT SECTION */}
+          {/*  SCANNER INPUT SECTION */}
           <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex items-center gap-3">
              <ScanBarcode className="text-indigo-600 dark:text-indigo-400" size={24} />
              <div className="flex-1">
@@ -224,7 +208,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
                         placeholder="Scan or type & hit Enter..."
                         autoFocus
                     />
-                    {/* ✅ Camera Button */}
+                    {/* Camera Button */}
                     <button 
                         onClick={() => setShowScanner(true)}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -315,7 +299,7 @@ export default function ProductForm({ onClose, onSave, initial }) {
             </label>
           </div>
 
-          {/* ✅ New Row: GST Selection & Reorder Point */}
+          {/*  New Row: GST Selection & Reorder Point */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block">
                 <div className="text-sm font-medium text-foreground mb-1">GST %</div>
