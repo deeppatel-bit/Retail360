@@ -6,13 +6,31 @@ export const generateInvoice = (sale, storeSettings, products) => {
 
   const doc = new jsPDF();
 
-  // --- Helper: Product Name શોધવા માટે ---
+  // --- CONFIGURATION & COLORS ---
+  const colors = {
+    primary: [30, 58, 138],    // Navy Blue
+    secondary: [100, 116, 139], // Slate Gray
+    accent: [234, 179, 8],     // Gold/Yellow
+    text: [31, 41, 55],        // Dark Gray
+    lightBg: [243, 244, 246]   // Light Gray for headers
+  };
+
+  const fonts = {
+    bold: "helvetica",
+    normal: "helvetica"
+  };
+
+  // --- HELPERS ---
+  const formatCurrency = (amount) => {
+    return Number(amount || 0).toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   const getProductName = (line) => {
-    // 1. જો લાઈનમાં જ નામ હોય
     if (line.product && line.product.name) return line.product.name;
     if (line.name) return line.name;
-    
-    // 2. Products લિસ્ટમાંથી ID દ્વારા શોધો
     if (products && line.productId) {
       const p = products.find(prod => prod.id === line.productId || prod._id === line.productId);
       if (p) return p.name;
@@ -20,90 +38,95 @@ export const generateInvoice = (sale, storeSettings, products) => {
     return "Item";
   };
 
-  // --- COLORS ---
-  const colorBlue = [30, 58, 138];   // Dark Blue (#1e3a8a) for Headers
-  const colorGold = [234, 179, 8];   // Gold (#EAB308) for Store Name
-  const colorGray = [80, 80, 80];    // Gray for text
-
   // ==========================================
-  // 1. HEADER SECTION (Store Details)
+  // 1. HEADER SECTION
   // ==========================================
   
-  // Store Name
-  doc.setFontSize(24);
-  doc.setTextColor(...colorGold);
-  doc.setFont("helvetica", "bold");
-  doc.text(storeSettings?.storeName?.toUpperCase() || "MY STORE", 14, 20);
+  let startY = 20;
 
-  // Invoice Title (Right side)
+  // -- LOGO (If available in storeSettings.logoBase64) --
+  // Ensure your storeSettings has a valid base64 string (data:image/png;base64,...)
+  if (storeSettings?.logo) {
+    try {
+        doc.addImage(storeSettings.logo, 'PNG', 14, 10, 25, 25); // x, y, w, h
+        startY = 40; // Push text down if logo exists
+    } catch (e) {
+        console.warn("Logo load failed", e);
+    }
+  }
+
+  // -- STORE DETAILS (Left Side) --
+  doc.setFont(fonts.bold, "bold");
   doc.setFontSize(20);
-  doc.setTextColor(...colorBlue);
-  doc.text("INVOICE", 196, 20, { align: "right" });
+  doc.setTextColor(...colors.primary);
+  doc.text(storeSettings?.storeName?.toUpperCase() || "MY STORE", 14, startY);
 
-  // Store Address & Contact (Left Side)
-  doc.setFontSize(10);
-  doc.setTextColor(...colorGray);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fonts.normal, "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.secondary);
   
-  let yPos = 28;
-  if (storeSettings?.address) {
-    doc.text(storeSettings.address, 14, yPos);
-    yPos += 5;
-  }
-  if (storeSettings?.phone) {
-    doc.text(`Phone: ${storeSettings.phone}`, 14, yPos);
-    yPos += 5;
-  }
-  if (storeSettings?.email) {
-    doc.text(`Email: ${storeSettings.email}`, 14, yPos);
-    yPos += 5;
-  }
-  if (storeSettings?.gst) {
-    doc.text(`GSTIN: ${storeSettings.gst}`, 14, yPos);
-  }
+  let yPos = startY + 6;
+  const addressLines = doc.splitTextToSize(storeSettings?.address || "", 80);
+  doc.text(addressLines, 14, yPos);
+  yPos += (addressLines.length * 4);
 
-  // Invoice Details Table (Right Side)
+  if (storeSettings?.phone) { doc.text(`Phone: ${storeSettings.phone}`, 14, yPos); yPos += 4; }
+  if (storeSettings?.email) { doc.text(`Email: ${storeSettings.email}`, 14, yPos); yPos += 4; }
+  if (storeSettings?.gst)   { doc.text(`GSTIN: ${storeSettings.gst}`, 14, yPos); }
+
+  // -- INVOICE META DATA (Right Side) --
   autoTable(doc, {
     body: [
-      ["Invoice No:", sale.saleId],
-      ["Date:", new Date(sale.date).toLocaleDateString("en-IN")],
-      ["Payment Mode:", sale.paymentMode || "Cash"]
+      ["INVOICE NO", sale.saleId],
+      ["DATE", new Date(sale.date).toLocaleDateString("en-IN")],
+      ["PAYMENT MODE", sale.paymentMode || "Cash"]
     ],
-    startY: 25,
-    margin: { left: 120 }, // Push to right
+    startY: 20,
+    margin: { left: 130 },
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 1, textColor: 80, halign: 'right' },
+    styles: { 
+        fontSize: 10, 
+        cellPadding: 1.5, 
+        halign: 'right',
+        textColor: colors.text
+    },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: [...colorBlue], cellWidth: 40 },
+      0: { fontStyle: 'bold', textColor: colors.secondary, cellWidth: 35 },
+      1: { fontStyle: 'bold', textColor: colors.primary }
     }
   });
 
   // ==========================================
-  // 2. BILL TO SECTION (Customer)
+  // 2. CUSTOMER / BILL TO
   // ==========================================
-  const billToY = Math.max(yPos, doc.lastAutoTable.finalY) + 12;
+  const headerEndY = Math.max(yPos, doc.lastAutoTable.finalY) + 10;
 
-  // Blue Bar Background
-  doc.setFillColor(...colorBlue);
-  doc.rect(14, billToY, 182, 8, 'F'); 
+  // Gray Box Background
+  doc.setFillColor(...colors.lightBg);
+  doc.roundedRect(14, headerEndY, 182, 18, 1, 1, 'F');
 
-  // "BILL TO" Text
-  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.secondary);
+  doc.text("BILL TO:", 18, headerEndY + 6);
+
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("BILL TO", 16, billToY + 5.5);
+  doc.setTextColor(...colors.text);
+  doc.setFont(fonts.bold, "bold");
+  doc.text(sale.customerName || "Walk-in Customer", 18, headerEndY + 12);
 
-  // Customer Name & Details
-  doc.setTextColor(0);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text(sale.customerName || "Walk-in Customer", 14, billToY + 16);
-  
+  if (sale.customerPhone) {
+      doc.setFont(fonts.normal, "normal");
+      doc.setFontSize(9);
+      doc.text(`Mobile: ${sale.customerPhone}`, 120, headerEndY + 12);
+  }
+
   // ==========================================
-  // 3. ITEMS TABLE
+  // 3. PRODUCT TABLE
   // ==========================================
-  const tableColumn = ["#", "ITEM DESCRIPTION", "QTY", "PRICE", "DISC", "TOTAL"];
+  const tableColumn = ["#", "ITEM DESCRIPTION", "QTY", "RATE", "DISC", "TAX %", "TOTAL"];
   const tableRows = [];
+
+  let calculatedSubtotal = 0;
 
   if (sale.lines && Array.isArray(sale.lines)) {
     sale.lines.forEach((line, index) => {
@@ -111,103 +134,139 @@ export const generateInvoice = (sale, storeSettings, products) => {
       const qty = Number(line.qty);
       const price = Number(line.price);
       const discountPercent = Number(line.discountPercent || 0);
-      
-      // Calculate Amounts
+      const taxPercent = Number(line.taxPercent || 0);
+
+      // Math
       const grossAmount = qty * price;
       const discAmount = (grossAmount * discountPercent) / 100;
-      const taxAmount = ((grossAmount - discAmount) * (line.taxPercent || 0)) / 100;
-      const netAmount = grossAmount - discAmount + taxAmount;
+      const taxableAmount = grossAmount - discAmount;
+      const taxAmount = (taxableAmount * taxPercent) / 100;
+      const netAmount = taxableAmount + taxAmount;
 
-      const itemData = [
+      calculatedSubtotal += netAmount; // Summing up final line totals
+
+      tableRows.push([
         index + 1,
         pName,
         qty,
-        price.toFixed(2),
+        formatCurrency(price),
         discountPercent > 0 ? `${discountPercent}%` : "-",
-        netAmount.toFixed(2),
-      ];
-      tableRows.push(itemData);
+        taxPercent > 0 ? `${taxPercent}%` : "-",
+        formatCurrency(netAmount)
+      ]);
     });
   }
 
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: billToY + 22,
-    theme: 'striped', // Zebra stripes
+    startY: headerEndY + 22,
+    theme: 'grid',
     headStyles: { 
-      fillColor: [...colorBlue], 
+      fillColor: colors.primary, 
       textColor: 255, 
       fontStyle: 'bold',
-      halign: 'center'
+      halign: 'center',
+      fontSize: 9
     },
-    styles: { fontSize: 10, cellPadding: 3, valign: 'middle' },
+    styles: { 
+      fontSize: 9, 
+      cellPadding: 3, 
+      valign: 'middle', 
+      textColor: colors.text 
+    },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 12 }, // Index
-      1: { halign: 'left' },                  // Name
-      2: { halign: 'center' },                // Qty
-      3: { halign: 'right' },                 // Price
-      4: { halign: 'center' },                // Disc
-      5: { halign: 'right', fontStyle: 'bold' } // Total
+      0: { halign: 'center', cellWidth: 10 }, 
+      1: { halign: 'left' },                  
+      2: { halign: 'center' },                
+      3: { halign: 'right' },                 
+      4: { halign: 'center' },                
+      5: { halign: 'center' },                
+      6: { halign: 'right', fontStyle: 'bold' } 
     },
-    alternateRowStyles: { fillColor: [245, 247, 250] } // Light Gray rows
+    alternateRowStyles: { fillColor: [249, 250, 251] }
   });
 
   // ==========================================
-  // 4. TOTALS & FOOTER
+  // 4. FOOTER & TOTALS
   // ==========================================
   const finalY = doc.lastAutoTable.finalY + 5;
+  const pageHeight = doc.internal.pageSize.height;
 
-  // Notes on Left
-  if (sale.notes) {
-      doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.setFont("helvetica", "italic");
-      doc.text(`Note: ${sale.notes}`, 14, finalY + 10);
-  }
+  // -- NOTES & TERMS (Left Side) --
+  const notesY = finalY + 5;
+  doc.setFontSize(9);
+  doc.setFont(fonts.bold, "bold");
+  doc.setTextColor(...colors.text);
+  doc.text("Terms & Conditions:", 14, notesY);
+  
+  doc.setFont(fonts.normal, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.secondary);
+  const terms = [
+    "1. Goods once sold will not be taken back.",
+    "2. Subject to local jurisdiction.",
+    sale.notes ? `Note: ${sale.notes}` : ""
+  ];
+  
+  let termY = notesY + 5;
+  terms.forEach(term => {
+      if(term) {
+        doc.text(term, 14, termY);
+        termY += 4;
+      }
+  });
 
-  // Totals Calculation Table (Right Side)
+  // -- TOTALS TABLE (Right Side) --
+  // We use the Sale object totals, but fallback to calculated if needed
+  const totalAmount = Number(sale.total);
+  const paidAmount = Number(sale.amountPaid || 0);
+  const dueAmount = Number(sale.balanceDue || 0);
+
   autoTable(doc, {
     body: [
-      ["Subtotal:", `${Number(sale.total - (sale.balanceDue > 0 ? 0 : 0)).toFixed(2)}`], 
-      ["Paid Amount:", `${Number(sale.amountPaid).toFixed(2)}`],
-      ["Balance Due:", `${Number(sale.balanceDue).toFixed(2)}`],
-      ["GRAND TOTAL:", `Rs. ${Number(sale.total).toFixed(2)}`] // Bold Row
+      ["Subtotal", formatCurrency(calculatedSubtotal)], // Or use sale.subtotal if your backend sends it
+      ["Paid Amount", formatCurrency(paidAmount)],
+      ["Balance Due", formatCurrency(dueAmount)],
+      ["GRAND TOTAL", `Rs. ${formatCurrency(totalAmount)}`]
     ],
     startY: finalY,
-    margin: { left: 120 }, 
+    margin: { left: 120 },
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 2, textColor: 80, halign: 'right' },
+    styles: { 
+        fontSize: 10, 
+        cellPadding: 2, 
+        halign: 'right',
+        textColor: colors.text 
+    },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: [...colorBlue], cellWidth: 40 }, // Labels
-      1: { fontStyle: 'bold', textColor: 0 } // Values
+      0: { fontStyle: 'bold', textColor: colors.secondary },
+      1: { fontStyle: 'bold' }
     },
     didParseCell: function (data) {
-        // Balance Due RED if pending
-        if (data.row.index === 2 && sale.balanceDue > 0) {
-            data.cell.styles.textColor = [220, 38, 38];
-        }
-        // Grand Total Row Style
-        if (data.row.index === 3) {
-            data.cell.styles.fillColor = [...colorBlue];
-            data.cell.styles.textColor = [255, 255, 255];
-            data.cell.styles.fontSize = 11;
-        }
+      // Highlight Balance Due in Red if > 0
+      if (data.row.index === 2 && dueAmount > 0.5) {
+        data.cell.styles.textColor = [220, 38, 38]; // Red
+      }
+      // Highlight Grand Total Box
+      if (data.row.index === 3) {
+        data.cell.styles.fillColor = colors.primary;
+        data.cell.styles.textColor = [255, 255, 255];
+        data.cell.styles.fontSize = 12;
+      }
     }
   });
 
-  // Footer Line & Thank You
-  const pageHeight = doc.internal.pageSize.height;
-  
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(...colorBlue);
-  doc.line(14, pageHeight - 20, 196, pageHeight - 20); // Bottom Line
+  // -- BOTTOM FOOTER --
+  doc.setDrawColor(...colors.secondary);
+  doc.setLineWidth(0.1);
+  doc.line(14, pageHeight - 15, 196, pageHeight - 15);
 
-  doc.setFontSize(10);
-  doc.setTextColor(...colorBlue);
-  doc.setFont("helvetica", "bold");
-  doc.text("THANK YOU FOR YOUR BUSINESS!", 105, pageHeight - 12, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.secondary);
+  doc.text("Thank you for your business!", 105, pageHeight - 10, { align: "center" });
+  doc.text("Generated via Retail360", 196, pageHeight - 10, { align: "right" });
 
-  // Save PDF
+  // SAVE
   doc.save(`Invoice_${sale.saleId}.pdf`);
 };
