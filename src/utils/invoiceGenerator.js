@@ -24,32 +24,32 @@ export const generateInvoice = (sale, storeSettings, products) => {
     return "Item";
   };
 
-  // --- COLORS (Based on Image) ---
+  // --- COLORS ---
   const colors = {
-    primary: [44, 62, 80],     // Dark Slate Blue (Header Text)
-    accent: [52, 73, 94],      // Grand Total Background
-    grayLine: [200, 200, 200], // Light dividers
-    lightBg: [240, 240, 240],  // Table Header Background
-    text: [40, 40, 40]         // Standard Text
+    primary: [44, 62, 80],     
+    accent: [52, 73, 94],      
+    grayLine: [200, 200, 200], 
+    lightBg: [240, 240, 240],  
+    text: [40, 40, 40]         
   };
 
   // ==========================================
   // 1. HEADER SECTION (CENTERED)
   // ==========================================
   
-  // Store Name (Dynamic)
+  // Store Name
   doc.setFontSize(26);
   doc.setTextColor(...colors.primary);
   doc.setFont("helvetica", "bold");
   const storeName = storeSettings?.storeName || "MY STORE";
-  doc.text(storeName, 105, 20, { align: "center" }); // 105 = Center of A4
+  doc.text(storeName, 105, 20, { align: "center" });
 
-  // Top Divider Line
+  // Top Divider
   doc.setDrawColor(...colors.grayLine);
   doc.setLineWidth(0.5);
   doc.line(30, 25, 180, 25);
 
-  // Address & Contact (Centered)
+  // Address
   doc.setFontSize(10);
   doc.setTextColor(...colors.text);
   doc.setFont("helvetica", "normal");
@@ -69,7 +69,7 @@ export const generateInvoice = (sale, storeSettings, products) => {
     yPos += 6;
   }
 
-  // Bottom Divider Line
+  // Bottom Divider
   doc.line(30, yPos, 180, yPos);
   
   // "INVOICE" Title
@@ -80,33 +80,44 @@ export const generateInvoice = (sale, storeSettings, products) => {
   doc.text("INVOICE", 105, yPos, { align: "center" });
 
   // ==========================================
-  // 2. META DETAILS (Left & Right)
+  // 2. META DETAILS (INVOICE NO, GST, DATE)
   // ==========================================
   yPos += 12;
-  doc.setDrawColor(230, 230, 230); // Very light gray for separators
-  doc.line(14, yPos - 5, 196, yPos - 5); // Line above Invoice No
+  doc.setDrawColor(230, 230, 230);
+  doc.line(14, yPos - 5, 196, yPos - 5); 
 
   doc.setFontSize(10);
   doc.setTextColor(0);
   doc.setFont("helvetica", "normal");
 
-  // Left Side: Invoice No
+  // --- LEFT SIDE: Invoice No & Customer GST ---
   doc.text(`Invoice No: ${sale.saleId}`, 14, yPos);
+  
+  // ✅ NEW LOGIC: Show Customer GST below Invoice No if exists
+  if (sale.customerGst) {
+      yPos += 5; // Move down a bit
+      doc.setFontSize(9);
+      doc.setTextColor(80); // Slightly lighter for GST
+      doc.text(`GSTIN: ${sale.customerGst}`, 14, yPos);
+      doc.setFontSize(10);
+      doc.setTextColor(0); // Reset color
+      yPos -= 5; // Reset Y for right side alignment
+  }
 
-  // Right Side: Date
+  // --- RIGHT SIDE: Date & Payment Mode ---
   const dateStr = new Date(sale.date).toLocaleDateString("en-IN");
   doc.text(`Date:   ${dateStr}`, 196, yPos, { align: "right" });
 
-  yPos += 6;
-  // Right Side: Payment Mode
-  doc.text(`Payment Mode: ${sale.paymentMode || "Cash"}`, 196, yPos, { align: "right" });
+  const rightY = sale.customerGst ? yPos + 5 : yPos + 6; // Adjust spacing based on GST presence
+  doc.text(`Payment Mode: ${sale.paymentMode || "Cash"}`, 196, rightY, { align: "right" });
 
-  doc.line(14, yPos + 2, 196, yPos + 2); // Line below details
+  const dividerY = sale.customerGst ? yPos + 8 : yPos + 8;
+  doc.line(14, dividerY, 196, dividerY); 
 
   // ==========================================
   // 3. BILL TO SECTION
   // ==========================================
-  yPos += 10;
+  yPos = dividerY + 8;
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...colors.primary);
   doc.text("Bill To:", 14, yPos);
@@ -122,7 +133,7 @@ export const generateInvoice = (sale, storeSettings, products) => {
   }
 
   // ==========================================
-  // 4. ITEMS TABLE (Style matched to image)
+  // 4. ITEMS TABLE
   // ==========================================
   const tableStartY = yPos + 8;
   
@@ -140,10 +151,7 @@ export const generateInvoice = (sale, storeSettings, products) => {
       
       const grossAmount = qty * price;
       const discAmount = (grossAmount * discountPercent) / 100;
-      const netAmount = grossAmount - discAmount; // Excluding Tax for now to match structure
-      
-      // Note: If your system includes Tax in amount, adjust logic here. 
-      // The image shows Subtotal, then CGST/SGST added.
+      const netAmount = grossAmount - discAmount; 
       
       calculatedSubtotal += netAmount;
 
@@ -161,9 +169,9 @@ export const generateInvoice = (sale, storeSettings, products) => {
     head: [tableColumn],
     body: tableRows,
     startY: tableStartY,
-    theme: 'plain', // Clean look
+    theme: 'plain',
     headStyles: { 
-      fillColor: [...colors.lightBg], // Light Gray Header
+      fillColor: [...colors.lightBg], 
       textColor: 0,
       fontStyle: 'bold',
       halign: 'left',
@@ -178,33 +186,25 @@ export const generateInvoice = (sale, storeSettings, products) => {
       lineWidth: 0.1
     },
     columnStyles: {
-      0: { halign: 'left', cellWidth: 'auto' }, // Item Name
-      1: { halign: 'center' }, // Qty
-      2: { halign: 'right' },  // Rate
-      3: { halign: 'center' }, // Discount
-      4: { halign: 'right' }   // Amount
+      0: { halign: 'left' }, 
+      1: { halign: 'center' },
+      2: { halign: 'right' },
+      3: { halign: 'center' }, 
+      4: { halign: 'right' }  
     },
-    // Add bottom border to table header
     didDrawCell: (data) => {
-       if (data.section === 'head') {
-         doc.setDrawColor(200, 200, 200);
-         doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
-       }
-       // Add bottom border to body rows
-       if (data.section === 'body') {
-         doc.setDrawColor(240, 240, 240);
+       if (data.section === 'head' || data.section === 'body') {
+         doc.setDrawColor(230, 230, 230);
          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
        }
     }
   });
 
   // ==========================================
-  // 5. TOTALS SECTION (Image Style)
+  // 5. TOTALS SECTION
   // ==========================================
   const finalY = doc.lastAutoTable.finalY + 5;
   
-  // Logic for Tax Split (Assuming 18% GST split into 9% CGST + 9% SGST)
-  // You can adjust this based on your actual data
   const taxAmount = (sale.total - calculatedSubtotal); 
   const cgst = taxAmount / 2;
   const sgst = taxAmount / 2;
@@ -217,7 +217,7 @@ export const generateInvoice = (sale, storeSettings, products) => {
       ["GRAND TOTAL:", `Rs. ${formatCurrency(sale.total)}`]
     ],
     startY: finalY,
-    margin: { left: 110 }, // Push to right side
+    margin: { left: 110 }, 
     theme: 'plain',
     styles: { 
         fontSize: 10, 
@@ -226,33 +226,28 @@ export const generateInvoice = (sale, storeSettings, products) => {
         textColor: 0 
     },
     columnStyles: {
-      0: { cellWidth: 40 }, // Labels
-      1: { fontStyle: 'bold' } // Values
+      0: { cellWidth: 40 }, 
+      1: { fontStyle: 'bold' } 
     },
     didParseCell: function (data) {
-      // Style the Grand Total Row (Dark Blue Background, White Text)
       if (data.row.index === 3) {
         data.cell.styles.fillColor = [...colors.accent];
         data.cell.styles.textColor = [255, 255, 255];
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fontSize = 11;
-        // Add some padding adjustment visually if needed
       }
     }
   });
 
   // ==========================================
-  // 6. FOOTER (Centered with Lines)
+  // 6. FOOTER
   // ==========================================
   const pageHeight = doc.internal.pageSize.height;
   const footerY = pageHeight - 30;
 
   doc.setDrawColor(220, 220, 220);
   doc.setLineWidth(0.5);
-  
-  // Left line
   doc.line(50, footerY, 80, footerY);
-  // Right line
   doc.line(130, footerY, 160, footerY);
 
   doc.setFontSize(10);
@@ -260,6 +255,5 @@ export const generateInvoice = (sale, storeSettings, products) => {
   doc.setTextColor(...colors.primary);
   doc.text("Thank you for shopping with us!", 105, footerY + 1.5, { align: "center" });
 
-  // Save PDF
-  doc.save(`${storeSettings?.storeName || "Retail360"}_Invoice_${sale.saleId}.pdf`);
+  doc.save(`${storeSettings?.storeName || "Invoice"}_${sale.saleId}.pdf`);
 };
