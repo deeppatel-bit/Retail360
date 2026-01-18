@@ -8,7 +8,8 @@ import { useToast } from "../../context/ToastContext";
 const ITEMS_PER_PAGE = 9;
 
 export default function LedgerPage() {
-    const { ledgers, addLedger, editLedger, deleteLedger, sales, receipts, addReceipt } = useStore();
+    // ✅ ADDED: updateSale here to update invoice status
+    const { ledgers, addLedger, editLedger, deleteLedger, sales, updateSale, receipts, addReceipt } = useStore();
     const toast = useToast();
 
     const [view, setView] = useState("manage"); // manage | report
@@ -29,7 +30,7 @@ export default function LedgerPage() {
         currentDue: 0 // To show in modal
     });
 
-    // ********** 1. BALANCE CALCULATION LOGIC (Updated) **********
+    // ********** 1. BALANCE CALCULATION LOGIC **********
     const ledgerStats = useMemo(() => {
         return ledgers.map((customer) => {
             // 1. Total Sales Bill Amount for the customer
@@ -61,7 +62,7 @@ export default function LedgerPage() {
                 balance
             };
         }).sort((a, b) => a.name.localeCompare(b.name));
-    }, [ledgers, sales, receipts]); // Recalculate when receipts change
+    }, [ledgers, sales, receipts]); 
 
     const filteredLedgers = ledgerStats.filter((l) =>
         l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -98,22 +99,59 @@ export default function LedgerPage() {
         setShowPaymentModal(true);
     };
 
-    // ✅ Handle Payment Submit
+    // ✅ UPDATED: Handle Payment Submit (Updates Sales History too)
     const handlePaymentSubmit = async () => {
         if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
             return toast.error("Enter valid amount");
         }
 
-        // Add Receipt (This will reduce the balance)
+        const paymentAmount = Number(paymentForm.amount);
+
+        // 1. Add Receipt (This records the transaction in ledger)
         await addReceipt({
             customerName: paymentForm.customerName,
-            amount: Number(paymentForm.amount),
+            amount: paymentAmount,
             date: paymentForm.date,
             mode: paymentForm.mode,
-            note: "Payment Received via Ledger" // Will show in report
+            note: "Payment Received via Ledger"
         });
 
-        toast.success(`Received ₹${paymentForm.amount} from ${paymentForm.customerName}`);
+        // 2. 🚀 AUTO-UPDATE SALES HISTORY LOGIC 🚀
+        // Find all unpaid/partial bills for this customer
+        const pendingSales = sales.filter(
+            (s) => s.customerName.toLowerCase() === paymentForm.customerName.toLowerCase() && s.balanceDue > 0
+        );
+
+        // Sort by date (Oldest bill first)
+        pendingSales.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let moneyToDistribute = paymentAmount;
+
+        for (let sale of pendingSales) {
+            if (moneyToDistribute <= 0) break; // Stop if money runs out
+
+            const currentDue = Number(sale.balanceDue);
+            
+            // How much to deduct from this bill?
+            const deductAmount = Math.min(currentDue, moneyToDistribute);
+
+            // Calculate new values
+            const newAmountPaid = Number(sale.amountPaid || 0) + deductAmount;
+            const newBalanceDue = currentDue - deductAmount;
+            const newStatus = newBalanceDue <= 0 ? "Paid" : "Partial";
+
+            // Update the sale in context/database
+            updateSale(sale.saleId, {
+                ...sale,
+                amountPaid: newAmountPaid,
+                balanceDue: newBalanceDue,
+                paymentStatus: newStatus
+            });
+
+            moneyToDistribute -= deductAmount;
+        }
+
+        toast.success(`Received ₹${paymentAmount} & Updated Bills`);
         setShowPaymentModal(false);
     };
 
