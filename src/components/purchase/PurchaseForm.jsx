@@ -157,8 +157,13 @@ export default function PurchaseForm({ editMode }) {
       balanceDue,
     };
 
-    if (editMode && id) {
-      updatePurchase(id, payload);
+   if (editMode && id) {
+      // ✅ FIX: જો initial ડેટા હોય તો તેનું સાચું _id વાપરો, નહિતર URL id વાપરો
+      const dbId = initial?._id || id; 
+      
+      // સાચા ID સાથે અપડેટ કરો
+      updatePurchase(dbId, payload); 
+      
       toast.success("Purchase updated successfully");
     } else {
       addPurchase(payload);
