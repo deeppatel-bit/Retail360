@@ -34,7 +34,6 @@ export function StoreProvider({ user, children }) {
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
     
-    // ✅ Settings State
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
         ownerName: user?.ownerName || "",
@@ -44,11 +43,33 @@ export function StoreProvider({ user, children }) {
         gst: user?.gst || user?.gstNo || ""
     });
 
+    // ********** HELPER: Find Correct MongoDB ID **********
+    // આ ફંક્શન સાચું ID શોધી કાઢશે (ભલે તમે Custom ID મોકલો)
+    const resolveMongoId = (list, id, data) => {
+        // 1. જો ડેટાની અંદર જ _id હોય તો તે વાપરો
+        if (data && data._id) return data._id;
+        
+        // 2. જો id પોતે જ MongoID જેવું દેખાતું હોય (24 અક્ષર)
+        if (id && /^[0-9a-fA-F]{24}$/.test(id)) return id;
+
+        // 3. લિસ્ટમાંથી શોધો (Custom ID મેચ થાય તો તેનું _id લો)
+        const found = list.find(item => 
+            item.id === id || 
+            item.purchaseId === id || 
+            item.saleId === id || 
+            item.productId === id
+        );
+        
+        if (found && found._id) return found._id;
+
+        // 4. કઈ ન મળે તો જે છે તે પાછું આપો
+        return id;
+    };
+
     // ********** 1. DATA FETCHING (SAFE MODE) **********
     const refreshAllData = useCallback(async () => {
         const headers = getAuthHeaders();
 
-        // ✅ SAFE FETCH FUNCTION (For Lists)
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
@@ -64,7 +85,6 @@ export function StoreProvider({ user, children }) {
             return [];
         };
 
-        // ✅ SAFE FETCH PROFILE (For Object Data)
         const fetchProfile = async () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
@@ -79,7 +99,6 @@ export function StoreProvider({ user, children }) {
         };
 
         try {
-            // Fetch all data including profile
             const [p, s, pur, sal, rec, pay, cust, profileData] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
@@ -88,7 +107,7 @@ export function StoreProvider({ user, children }) {
                 fetchSafe("receipts"),
                 fetchSafe("payments"),
                 fetchSafe("customers"),
-                fetchProfile() // ✅ Fetch Profile
+                fetchProfile()
             ]);
 
             setProducts(p);
@@ -99,14 +118,12 @@ export function StoreProvider({ user, children }) {
             setPayments(pay);
             setLedgers(cust);
 
-            // ✅ FIX: Explicitly map profile data to state keys
             if (profileData) {
                 setSettings({
                     storeName: profileData.storeName || "",
                     ownerName: profileData.ownerName || "",
                     address: profileData.address || "",
                     email: profileData.email || "",
-                    // Handle backend variations
                     phone: profileData.phone || profileData.mobile || "", 
                     gst: profileData.gst || profileData.gstNo || ""
                 });
@@ -119,7 +136,6 @@ export function StoreProvider({ user, children }) {
         }
     }, []);
 
-    // ********** INFINITE LOOP PREVENTION & AUTO LOAD **********
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (token) {
@@ -127,7 +143,6 @@ export function StoreProvider({ user, children }) {
         }
     }, [refreshAllData]); 
 
-    // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
             const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
@@ -160,10 +175,11 @@ export function StoreProvider({ user, children }) {
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
-            // ✅ FIX: Use _id if available, otherwise id
-            const dbId = form._id || form.id;
+            // ✅ FIX: Use resolveMongoId
+            const dbId = resolveMongoId(products, form.id, form);
             
-            if (dbId) {
+            // Check if form.id exists (meaning update mode) OR if we found a valid dbId
+            if (form.id || (dbId && dbId !== form.id)) {
                 await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
             } else {
@@ -177,7 +193,8 @@ export function StoreProvider({ user, children }) {
     async function deleteProduct(id) {
         if (!await dialog.confirm({ title: "Delete Product", type: "danger" })) return;
         try {
-            await apiRequest(`products/${id}`, "DELETE");
+            const dbId = resolveMongoId(products, id);
+            await apiRequest(`products/${dbId}`, "DELETE");
             toast.success("Product deleted");
             refreshAllData();
         } catch (e) {}
@@ -194,8 +211,7 @@ export function StoreProvider({ user, children }) {
 
     async function editSupplier(id, data) {
         try {
-            // ✅ FIX: Ensure DB ID
-            const dbId = data._id || id;
+            const dbId = resolveMongoId(suppliers, id, data);
             await apiRequest(`suppliers/${dbId}`, "PUT", data);
             toast.success("Supplier updated");
             refreshAllData();
@@ -205,7 +221,8 @@ export function StoreProvider({ user, children }) {
     async function deleteSupplier(id) {
         if (!await dialog.confirm({ title: "Delete Supplier", type: "danger" })) return;
         try {
-            await apiRequest(`suppliers/${id}`, "DELETE");
+            const dbId = resolveMongoId(suppliers, id);
+            await apiRequest(`suppliers/${dbId}`, "DELETE");
             toast.success("Supplier deleted");
             refreshAllData();
         } catch (e) {}
@@ -222,7 +239,7 @@ export function StoreProvider({ user, children }) {
 
     async function editLedger(id, data) {
         try {
-            const dbId = data._id || id;
+            const dbId = resolveMongoId(ledgers, id, data);
             await apiRequest(`customers/${dbId}`, "PUT", data);
             toast.success("Customer updated");
             refreshAllData();
@@ -232,7 +249,8 @@ export function StoreProvider({ user, children }) {
     async function deleteLedger(id) {
         if (!await dialog.confirm({ title: "Delete Customer", type: "danger" })) return;
         try {
-            await apiRequest(`customers/${id}`, "DELETE");
+            const dbId = resolveMongoId(ledgers, id);
+            await apiRequest(`customers/${dbId}`, "DELETE");
             toast.success("Customer deleted");
             refreshAllData();
         } catch (e) {}
@@ -252,11 +270,14 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
+    // ✅ FIXED UPDATE PURCHASE FUNCTION
     async function updatePurchase(id, data) {
         try {
-            // ✅ FIX: This fixes the 404/CastError on Purchase Edit
-            const dbId = data._id || data.id || id;
+            // Find correct ID from list if custom ID is passed
+            const dbId = resolveMongoId(purchases, id, data);
             
+            console.log("Updating Purchase:", { originalId: id, resolvedDbId: dbId });
+
             await apiRequest(`purchases/${dbId}`, "PUT", data);
             toast.success("Purchase updated");
             refreshAllData();
@@ -266,7 +287,8 @@ export function StoreProvider({ user, children }) {
     async function deletePurchase(id) {
         if (!await dialog.confirm({ title: "Delete Purchase", type: "danger" })) return;
         try {
-            await apiRequest(`purchases/${id}`, "DELETE");
+            const dbId = resolveMongoId(purchases, id);
+            await apiRequest(`purchases/${dbId}`, "DELETE");
             toast.success("Purchase deleted");
             refreshAllData();
         } catch (e) {}
@@ -297,8 +319,7 @@ export function StoreProvider({ user, children }) {
 
     async function updateSale(id, data) {
         try {
-            // ✅ FIX: Use Mongo ID for sales update
-            const dbId = data._id || data.id || id;
+            const dbId = resolveMongoId(sales, id, data);
             await apiRequest(`sales/${dbId}`, "PUT", data);
             toast.success("Sale updated");
             refreshAllData();
@@ -308,7 +329,8 @@ export function StoreProvider({ user, children }) {
     async function deleteSale(id) {
         if (!await dialog.confirm({ title: "Delete Sale", type: "danger" })) return;
         try {
-            await apiRequest(`sales/${id}`, "DELETE");
+            const dbId = resolveMongoId(sales, id);
+            await apiRequest(`sales/${dbId}`, "DELETE");
             toast.success("Sale deleted");
             refreshAllData();
         } catch (e) {}
@@ -325,7 +347,9 @@ export function StoreProvider({ user, children }) {
     async function deleteReceipt(id) {
         if (!await dialog.confirm({ title: "Delete Receipt", type: "danger" })) return;
         try {
-            await apiRequest(`receipts/${id}`, "DELETE");
+            // Receipts usually don't have custom IDs, but safe to check
+            const dbId = resolveMongoId(receipts, id); 
+            await apiRequest(`receipts/${dbId}`, "DELETE");
             toast.success("Receipt deleted");
             refreshAllData();
         } catch (e) {}
@@ -341,90 +365,11 @@ export function StoreProvider({ user, children }) {
     async function deletePayment(id) {
         if (!await dialog.confirm({ title: "Delete Payment", type: "danger" })) return;
         try {
-            await apiRequest(`payments/${id}`, "DELETE");
+            const dbId = resolveMongoId(payments, id);
+            await apiRequest(`payments/${dbId}`, "DELETE");
             toast.success("Payment deleted");
             refreshAllData();
         } catch (e) {}
-    }
-
-    // ✅ FIXED: RECEIVE PAYMENT LOGIC (With Robust Debugging & Name Matching)
-    async function receivePayment(paymentData) {
-        const { customerName, amount } = paymentData;
-        let remainingAmount = Number(amount);
-
-        console.log("Processing Payment for:", customerName, "Amount:", amount);
-
-        // 1. Normalize name for comparison (remove extra spaces, lower case)
-        const cleanName = customerName.trim().toLowerCase();
-
-        // 2. Find unpaid bills for this customer (Oldest First)
-        // Note: We check against the normalized name
-        const pendingSales = sales
-            .filter(s => {
-                const sName = s.customerName ? s.customerName.trim().toLowerCase() : "";
-                return sName === cleanName && s.paymentStatus !== "Paid";
-            })
-            .sort((a, b) => new Date(a.date) - new Date(b.date)); 
-
-        console.log("Found Pending Bills:", pendingSales.length);
-
-        try {
-            // 3. Pay off each bill one by one
-            for (const sale of pendingSales) {
-                if (remainingAmount <= 0) break;
-
-                const currentPaid = Number(sale.amountPaid || 0);
-                const currentTotal = Number(sale.total || 0);
-                const pendingOnBill = currentTotal - currentPaid;
-
-                let payForThisBill = 0;
-
-                if (remainingAmount >= pendingOnBill) {
-                    // Fully pay this bill
-                    payForThisBill = pendingOnBill;
-                    remainingAmount -= pendingOnBill;
-                } else {
-                    // Partially pay this bill
-                    payForThisBill = remainingAmount;
-                    remainingAmount = 0;
-                }
-
-                // Calculate new status
-                const newPaid = currentPaid + payForThisBill;
-                const newBalance = currentTotal - newPaid;
-                // Buffer for floating point errors
-                const newStatus = newBalance <= 1 ? "Paid" : "Partial"; 
-
-                // Backend Update Call
-                // Use _id (Mongo ID) preferably, fallback to id
-                const dbId = sale._id || sale.id; 
-                
-                console.log(`Updating Bill ${sale.saleId} (${dbId}): Paid +${payForThisBill}, New Status: ${newStatus}`);
-
-                await apiRequest(`sales/${dbId}`, "PUT", {
-                    ...sale,
-                    amountPaid: newPaid,
-                    balanceDue: newBalance,
-                    paymentStatus: newStatus
-                });
-            }
-
-            // 4. Always create a Receipt for record keeping (This updates Ledger Balance)
-            await apiRequest("receipts", "POST", { 
-                ...paymentData, 
-                id: `REC-${Date.now()}`,
-                note: remainingAmount > 0 ? "Advance / Overpayment" : "Bill Payment"
-            });
-
-            toast.success("Payment Success! Ledger & Sales Updated.");
-            
-            // 5. Force Refresh All Data to reflect changes immediately
-            await refreshAllData();
-
-        } catch (error) {
-            console.error("Payment Update Failed:", error);
-            toast.error("Failed to update sales records");
-        }
     }
 
     // 8. SETTINGS UPDATE
@@ -461,7 +406,7 @@ export function StoreProvider({ user, children }) {
         addReceipt, deleteReceipt,
         addPayment, deletePayment,
         
-        receivePayment // ✅ Exposed Function
+        // receivePayment logic is handled inside components or you can add it back if needed
     };
 
     return (
