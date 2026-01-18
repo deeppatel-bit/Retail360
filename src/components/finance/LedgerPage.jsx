@@ -128,25 +128,23 @@ export default function LedgerPage() {
         let moneyToDistribute = paymentAmount;
 
         for (let sale of pendingSales) {
-            if (moneyToDistribute <= 0) break; // Stop if money runs out
+            if (moneyToDistribute <= 0) break; 
 
             const currentDue = Number(sale.balanceDue);
-            
-            // How much to deduct from this bill?
             const deductAmount = Math.min(currentDue, moneyToDistribute);
 
-            // Calculate new values
             const newAmountPaid = Number(sale.amountPaid || 0) + deductAmount;
             const newBalanceDue = currentDue - deductAmount;
             const newStatus = newBalanceDue <= 0 ? "Paid" : "Partial";
 
-            // Update the sale in context/database
-            updateSale(sale.saleId, {
+            // 👇👇👇 UPDATE THIS LINE 👇👇👇
+            updateSale(sale._id || sale.id, { 
                 ...sale,
                 amountPaid: newAmountPaid,
                 balanceDue: newBalanceDue,
                 paymentStatus: newStatus
             });
+            // 👆👆👆 UPDATE THIS LINE 👆👆👆
 
             moneyToDistribute -= deductAmount;
         }
