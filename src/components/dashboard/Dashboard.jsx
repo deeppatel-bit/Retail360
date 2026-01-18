@@ -86,6 +86,7 @@ export default function Dashboard() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* --- RECENT PURCHASES SECTION (Fixed NaN issue) --- */}
             <div>
               <div className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -94,15 +95,20 @@ export default function Dashboard() {
               <ul className="divide-y divide-border">
                 {purchases.slice(0, 6).map((p, idx) => (
                   <motion.li 
-                    key={p.purchaseId} 
+                    key={p.purchaseId || idx} // Fallback key if ID is missing
                     className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
                     whileHover={{ x: 4 }}
                   >
                     <div>
-                      <div className="font-medium text-sm text-foreground">{p.supplierName}</div>
-                      <div className="text-xs text-muted-foreground">{new Date(p.date).toLocaleDateString()}</div>
+                      <div className="font-medium text-sm text-foreground">{p.supplierName || "Unknown Supplier"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {p.date ? new Date(p.date).toLocaleDateString() : "No Date"}
+                      </div>
                     </div>
-                    <div className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">₹ {Number(p.total).toFixed(2)}</div>
+                    {/* ✅ FIX: Added fallback (Number(p.total) || 0) to prevent NaN */}
+                    <div className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                      ₹ {(Number(p.total) || 0).toFixed(2)}
+                    </div>
                   </motion.li>
                 ))}
                 {!purchases.length && (
@@ -122,15 +128,20 @@ export default function Dashboard() {
               <ul className="divide-y divide-border">
                 {sales.slice(0, 6).map((s, idx) => (
                   <motion.li 
-                    key={s.saleId} 
+                    key={s.saleId || idx} 
                     className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
                     whileHover={{ x: 4 }}
                   >
                     <div>
-                      <div className="font-medium text-sm text-foreground">{s.customerName}</div>
-                      <div className="text-xs text-muted-foreground">{new Date(s.date).toLocaleDateString()}</div>
+                      <div className="font-medium text-sm text-foreground">{s.customerName || "Walk-in"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.date ? new Date(s.date).toLocaleDateString() : "No Date"}
+                      </div>
                     </div>
-                    <div className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">₹ {Number(s.total).toFixed(2)}</div>
+                    {/* Safety check added here as well */}
+                    <div className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">
+                      ₹ {(Number(s.total) || 0).toFixed(2)}
+                    </div>
                   </motion.li>
                 ))}
                 {!sales.length && (
