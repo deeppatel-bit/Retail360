@@ -160,8 +160,11 @@ export function StoreProvider({ user, children }) {
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
-            if (form.id) {
-                await apiRequest(`products/${form.id}`, "PUT", form);
+            // ✅ FIX: Use _id if available, otherwise id
+            const dbId = form._id || form.id;
+            
+            if (dbId) {
+                await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
             } else {
                 await apiRequest("products", "POST", form);
@@ -191,7 +194,9 @@ export function StoreProvider({ user, children }) {
 
     async function editSupplier(id, data) {
         try {
-            await apiRequest(`suppliers/${id}`, "PUT", data);
+            // ✅ FIX: Ensure DB ID
+            const dbId = data._id || id;
+            await apiRequest(`suppliers/${dbId}`, "PUT", data);
             toast.success("Supplier updated");
             refreshAllData();
         } catch (e) {}
@@ -217,7 +222,8 @@ export function StoreProvider({ user, children }) {
 
     async function editLedger(id, data) {
         try {
-            await apiRequest(`customers/${id}`, "PUT", data);
+            const dbId = data._id || id;
+            await apiRequest(`customers/${dbId}`, "PUT", data);
             toast.success("Customer updated");
             refreshAllData();
         } catch (e) {}
@@ -248,7 +254,10 @@ export function StoreProvider({ user, children }) {
 
     async function updatePurchase(id, data) {
         try {
-            await apiRequest(`purchases/${id}`, "PUT", data);
+            // ✅ FIX: This fixes the 404/CastError on Purchase Edit
+            const dbId = data._id || data.id || id;
+            
+            await apiRequest(`purchases/${dbId}`, "PUT", data);
             toast.success("Purchase updated");
             refreshAllData();
         } catch (e) {}
@@ -288,7 +297,9 @@ export function StoreProvider({ user, children }) {
 
     async function updateSale(id, data) {
         try {
-            await apiRequest(`sales/${id}`, "PUT", data);
+            // ✅ FIX: Use Mongo ID for sales update
+            const dbId = data._id || data.id || id;
+            await apiRequest(`sales/${dbId}`, "PUT", data);
             toast.success("Sale updated");
             refreshAllData();
         } catch (e) {}
