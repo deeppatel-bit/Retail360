@@ -34,6 +34,7 @@ export function StoreProvider({ user, children }) {
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
     
+    // ✅ Settings State
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
         ownerName: user?.ownerName || "",
@@ -43,26 +44,30 @@ export function StoreProvider({ user, children }) {
         gst: user?.gst || user?.gstNo || ""
     });
 
-    // ********** HELPER: Find Correct MongoDB ID **********
-    // આ ફંક્શન સાચું ID શોધી કાઢશે (ભલે તમે Custom ID મોકલો)
+    // ********** 🛠️ HELPER: FIND CORRECT DATABASE ID **********
+    // આ ફંક્શન ખાતરી કરશે કે આપણે હંમેશા _id (MongoID) જ વાપરીએ
     const resolveMongoId = (list, id, data) => {
-        // 1. જો ડેટાની અંદર જ _id હોય તો તે વાપરો
+        // 1. જો data ની અંદર જ _id હોય, તો તે વાપરો
         if (data && data._id) return data._id;
         
-        // 2. જો id પોતે જ MongoID જેવું દેખાતું હોય (24 અક્ષર)
+        // 2. જો id પોતે MongoID જેવું દેખાય (24 અક્ષરો), તો તે જ વાપરો
         if (id && /^[0-9a-fA-F]{24}$/.test(id)) return id;
 
         // 3. લિસ્ટમાંથી શોધો (Custom ID મેચ થાય તો તેનું _id લો)
-        const found = list.find(item => 
-            item.id === id || 
-            item.purchaseId === id || 
-            item.saleId === id || 
-            item.productId === id
-        );
-        
-        if (found && found._id) return found._id;
+        if (Array.isArray(list)) {
+            const found = list.find(item => 
+                item.id === id || 
+                item.purchaseId === id || 
+                item.saleId === id || 
+                item.productId === id ||
+                item.supplierId === id ||
+                item.customerId === id ||
+                item._id === id
+            );
+            if (found && found._id) return found._id;
+        }
 
-        // 4. કઈ ન મળે તો જે છે તે પાછું આપો
+        // 4. કઈ ન મળે તો જે છે તે પાછું આપો (શક્ય છે કે તે જ ID હોય)
         return id;
     };
 
@@ -70,6 +75,7 @@ export function StoreProvider({ user, children }) {
     const refreshAllData = useCallback(async () => {
         const headers = getAuthHeaders();
 
+        // ✅ SAFE FETCH FUNCTION (For Lists)
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
@@ -85,6 +91,7 @@ export function StoreProvider({ user, children }) {
             return [];
         };
 
+        // ✅ SAFE FETCH PROFILE (For Object Data)
         const fetchProfile = async () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
@@ -99,6 +106,7 @@ export function StoreProvider({ user, children }) {
         };
 
         try {
+            // Fetch all data including profile
             const [p, s, pur, sal, rec, pay, cust, profileData] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
@@ -107,7 +115,7 @@ export function StoreProvider({ user, children }) {
                 fetchSafe("receipts"),
                 fetchSafe("payments"),
                 fetchSafe("customers"),
-                fetchProfile()
+                fetchProfile() // ✅ Fetch Profile
             ]);
 
             setProducts(p);
@@ -118,12 +126,14 @@ export function StoreProvider({ user, children }) {
             setPayments(pay);
             setLedgers(cust);
 
+            // ✅ FIX: Explicitly map profile data to state keys
             if (profileData) {
                 setSettings({
                     storeName: profileData.storeName || "",
                     ownerName: profileData.ownerName || "",
                     address: profileData.address || "",
                     email: profileData.email || "",
+                    // Handle backend variations
                     phone: profileData.phone || profileData.mobile || "", 
                     gst: profileData.gst || profileData.gstNo || ""
                 });
@@ -136,6 +146,7 @@ export function StoreProvider({ user, children }) {
         }
     }, []);
 
+    // ********** INFINITE LOOP PREVENTION & AUTO LOAD **********
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (token) {
@@ -143,6 +154,7 @@ export function StoreProvider({ user, children }) {
         }
     }, [refreshAllData]); 
 
+    // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
             const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
@@ -175,10 +187,9 @@ export function StoreProvider({ user, children }) {
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
-            // ✅ FIX: Use resolveMongoId
+            // ✅ FIX: Use resolved DB ID
             const dbId = resolveMongoId(products, form.id, form);
             
-            // Check if form.id exists (meaning update mode) OR if we found a valid dbId
             if (form.id || (dbId && dbId !== form.id)) {
                 await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
@@ -270,12 +281,11 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ FIXED UPDATE PURCHASE FUNCTION
+    // ✅ FIXED: UPDATE PURCHASE with ID RESOLVER
     async function updatePurchase(id, data) {
         try {
             // Find correct ID from list if custom ID is passed
             const dbId = resolveMongoId(purchases, id, data);
-            
             console.log("Updating Purchase:", { originalId: id, resolvedDbId: dbId });
 
             await apiRequest(`purchases/${dbId}`, "PUT", data);
@@ -347,8 +357,7 @@ export function StoreProvider({ user, children }) {
     async function deleteReceipt(id) {
         if (!await dialog.confirm({ title: "Delete Receipt", type: "danger" })) return;
         try {
-            // Receipts usually don't have custom IDs, but safe to check
-            const dbId = resolveMongoId(receipts, id); 
+            const dbId = resolveMongoId(receipts, id);
             await apiRequest(`receipts/${dbId}`, "DELETE");
             toast.success("Receipt deleted");
             refreshAllData();
@@ -405,8 +414,6 @@ export function StoreProvider({ user, children }) {
         addSale, updateSale, deleteSale,
         addReceipt, deleteReceipt,
         addPayment, deletePayment,
-        
-        // receivePayment logic is handled inside components or you can add it back if needed
     };
 
     return (
