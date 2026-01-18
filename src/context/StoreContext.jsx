@@ -44,37 +44,31 @@ export function StoreProvider({ user, children }) {
         gst: user?.gst || user?.gstNo || ""
     });
 
-    // ********** 🛠️ SMART ID RESOLVER (NEW FIX) **********
-    // આ ફંક્શન ગમે તે ID (String/Number/Custom) ને MongoDB _id માં કન્વર્ટ કરશે
+    // ********** 🛠️ SMART ID RESOLVER (આ એરર ફિક્સ કરશે) **********
+    // આ ફંક્શન ખાતરી કરશે કે આપણે હંમેશા _id (MongoID) જ વાપરીએ
     const resolveMongoId = (list, id, data) => {
-        if (!id && !data) return null;
-
-        // 1. Check if data object already has _id
+        // 1. જો data ની અંદર જ _id હોય, તો તે વાપરો
         if (data && data._id) return data._id;
         
-        // 2. Check if ID itself looks like a MongoID (24 chars hex)
+        // 2. જો id પોતે MongoID જેવું દેખાય (24 અક્ષરો), તો તે જ વાપરો
         if (id && /^[0-9a-fA-F]{24}$/.test(String(id))) return id;
 
-        // 3. Find in list by matching ANY unique field
+        // 3. લિસ્ટમાંથી શોધો (Custom ID મેચ થાય તો તેનું _id લો)
         if (Array.isArray(list)) {
             const found = list.find(item => 
                 String(item.id) === String(id) || 
-                String(item._id) === String(id) ||
                 String(item.purchaseId) === String(id) || 
                 String(item.billNo) === String(id) || 
                 String(item.saleId) === String(id) || 
                 String(item.productId) === String(id) ||
                 String(item.supplierId) === String(id) ||
-                String(item.customerId) === String(id)
+                String(item.customerId) === String(id) ||
+                String(item._id) === String(id)
             );
-            
-            if (found && found._id) {
-                // console.log(`✅ Fixed ID: ${id} -> ${found._id}`);
-                return found._id;
-            }
+            if (found && found._id) return found._id;
         }
 
-        // 4. Fallback: Return original ID
+        // 4. કઈ ન મળે તો જે છે તે પાછું આપો
         return id;
     };
 
@@ -103,9 +97,12 @@ export function StoreProvider({ user, children }) {
             try {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
                 if (res.ok) {
-                    return await res.json();
+                    const data = await res.json();
+                    return data; 
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.warn("Failed to load profile:", e);
+            }
             return null;
         };
 
@@ -159,7 +156,7 @@ export function StoreProvider({ user, children }) {
         try {
             // Prevent bad requests
             if (endpoint.includes("undefined") || endpoint.includes("null")) {
-                throw new Error("Invalid ID: Unable to perform action.");
+                throw new Error("Invalid ID: Operation cancelled.");
             }
 
             const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
@@ -192,10 +189,8 @@ export function StoreProvider({ user, children }) {
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
-            // ✅ FIX: Use resolved ID
             const dbId = resolveMongoId(products, form.id, form);
             
-            // Check if we are updating (either form has id or we resolved a dbId)
             if (form.id || (dbId && dbId !== form.id)) {
                 await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
@@ -287,7 +282,7 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ FIXED UPDATE PURCHASE
+    // ✅ FIXED UPDATE PURCHASE (This solves the 404 error)
     async function updatePurchase(id, data) {
         try {
             const dbId = resolveMongoId(purchases, id, data);
@@ -384,12 +379,10 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ FIXED: RECEIVE PAYMENT LOGIC
+    // ✅ RECEIVE PAYMENT (Ledger Logic)
     async function receivePayment(paymentData) {
         const { customerName, amount } = paymentData;
         let remainingAmount = Number(amount);
-
-        // console.log("Processing Payment for:", customerName, "Amount:", amount);
 
         const cleanName = customerName.trim().toLowerCase();
 
@@ -422,7 +415,7 @@ export function StoreProvider({ user, children }) {
                 const newBalance = currentTotal - newPaid;
                 const newStatus = newBalance <= 1 ? "Paid" : "Partial"; 
 
-                // Use resolved ID here as well
+                // Use helper to ensure ID
                 const dbId = resolveMongoId(sales, sale.saleId, sale);
                 
                 await apiRequest(`sales/${dbId}`, "PUT", {
