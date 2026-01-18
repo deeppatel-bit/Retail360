@@ -44,30 +44,37 @@ export function StoreProvider({ user, children }) {
         gst: user?.gst || user?.gstNo || ""
     });
 
-    // ********** 🛠️ HELPER: FIND CORRECT DATABASE ID **********
-    // આ ફંક્શન ખાતરી કરશે કે આપણે હંમેશા _id (MongoID) જ વાપરીએ
+    // ********** 🛠️ SMART ID RESOLVER (NEW FIX) **********
+    // આ ફંક્શન ગમે તે ID (String/Number/Custom) ને MongoDB _id માં કન્વર્ટ કરશે
     const resolveMongoId = (list, id, data) => {
-        // 1. જો data ની અંદર જ _id હોય, તો તે વાપરો
+        if (!id && !data) return null;
+
+        // 1. Check if data object already has _id
         if (data && data._id) return data._id;
         
-        // 2. જો id પોતે MongoID જેવું દેખાય (24 અક્ષરો), તો તે જ વાપરો
-        if (id && /^[0-9a-fA-F]{24}$/.test(id)) return id;
+        // 2. Check if ID itself looks like a MongoID (24 chars hex)
+        if (id && /^[0-9a-fA-F]{24}$/.test(String(id))) return id;
 
-        // 3. લિસ્ટમાંથી શોધો (Custom ID મેચ થાય તો તેનું _id લો)
+        // 3. Find in list by matching ANY unique field
         if (Array.isArray(list)) {
             const found = list.find(item => 
-                item.id === id || 
-                item.purchaseId === id || 
-                item.saleId === id || 
-                item.productId === id ||
-                item.supplierId === id ||
-                item.customerId === id ||
-                item._id === id
+                String(item.id) === String(id) || 
+                String(item._id) === String(id) ||
+                String(item.purchaseId) === String(id) || 
+                String(item.billNo) === String(id) || 
+                String(item.saleId) === String(id) || 
+                String(item.productId) === String(id) ||
+                String(item.supplierId) === String(id) ||
+                String(item.customerId) === String(id)
             );
-            if (found && found._id) return found._id;
+            
+            if (found && found._id) {
+                // console.log(`✅ Fixed ID: ${id} -> ${found._id}`);
+                return found._id;
+            }
         }
 
-        // 4. કઈ ન મળે તો જે છે તે પાછું આપો (શક્ય છે કે તે જ ID હોય)
+        // 4. Fallback: Return original ID
         return id;
     };
 
@@ -75,7 +82,7 @@ export function StoreProvider({ user, children }) {
     const refreshAllData = useCallback(async () => {
         const headers = getAuthHeaders();
 
-        // ✅ SAFE FETCH FUNCTION (For Lists)
+        // ✅ SAFE FETCH FUNCTION
         const fetchSafe = async (endpoint) => {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
@@ -91,22 +98,18 @@ export function StoreProvider({ user, children }) {
             return [];
         };
 
-        // ✅ SAFE FETCH PROFILE (For Object Data)
+        // ✅ SAFE FETCH PROFILE
         const fetchProfile = async () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
                 if (res.ok) {
-                    const data = await res.json();
-                    return data; 
+                    return await res.json();
                 }
-            } catch (e) {
-                console.warn("Failed to load profile:", e);
-            }
+            } catch (e) { }
             return null;
         };
 
         try {
-            // Fetch all data including profile
             const [p, s, pur, sal, rec, pay, cust, profileData] = await Promise.all([
                 fetchSafe("products"),
                 fetchSafe("suppliers"),
@@ -115,7 +118,7 @@ export function StoreProvider({ user, children }) {
                 fetchSafe("receipts"),
                 fetchSafe("payments"),
                 fetchSafe("customers"),
-                fetchProfile() // ✅ Fetch Profile
+                fetchProfile()
             ]);
 
             setProducts(p);
@@ -126,14 +129,12 @@ export function StoreProvider({ user, children }) {
             setPayments(pay);
             setLedgers(cust);
 
-            // ✅ FIX: Explicitly map profile data to state keys
             if (profileData) {
                 setSettings({
                     storeName: profileData.storeName || "",
                     ownerName: profileData.ownerName || "",
                     address: profileData.address || "",
                     email: profileData.email || "",
-                    // Handle backend variations
                     phone: profileData.phone || profileData.mobile || "", 
                     gst: profileData.gst || profileData.gstNo || ""
                 });
@@ -146,7 +147,6 @@ export function StoreProvider({ user, children }) {
         }
     }, []);
 
-    // ********** INFINITE LOOP PREVENTION & AUTO LOAD **********
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (token) {
@@ -157,6 +157,11 @@ export function StoreProvider({ user, children }) {
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
+            // Prevent bad requests
+            if (endpoint.includes("undefined") || endpoint.includes("null")) {
+                throw new Error("Invalid ID: Unable to perform action.");
+            }
+
             const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
                 method,
                 headers: getAuthHeaders(),
@@ -187,9 +192,10 @@ export function StoreProvider({ user, children }) {
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
-            // ✅ FIX: Use resolved DB ID
+            // ✅ FIX: Use resolved ID
             const dbId = resolveMongoId(products, form.id, form);
             
+            // Check if we are updating (either form has id or we resolved a dbId)
             if (form.id || (dbId && dbId !== form.id)) {
                 await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
@@ -281,13 +287,10 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
-    // ✅ FIXED: UPDATE PURCHASE with ID RESOLVER
+    // ✅ FIXED UPDATE PURCHASE
     async function updatePurchase(id, data) {
         try {
-            // Find correct ID from list if custom ID is passed
             const dbId = resolveMongoId(purchases, id, data);
-            console.log("Updating Purchase:", { originalId: id, resolvedDbId: dbId });
-
             await apiRequest(`purchases/${dbId}`, "PUT", data);
             toast.success("Purchase updated");
             refreshAllData();
@@ -381,6 +384,70 @@ export function StoreProvider({ user, children }) {
         } catch (e) {}
     }
 
+    // ✅ FIXED: RECEIVE PAYMENT LOGIC
+    async function receivePayment(paymentData) {
+        const { customerName, amount } = paymentData;
+        let remainingAmount = Number(amount);
+
+        // console.log("Processing Payment for:", customerName, "Amount:", amount);
+
+        const cleanName = customerName.trim().toLowerCase();
+
+        const pendingSales = sales
+            .filter(s => {
+                const sName = s.customerName ? s.customerName.trim().toLowerCase() : "";
+                return sName === cleanName && s.paymentStatus !== "Paid";
+            })
+            .sort((a, b) => new Date(a.date) - new Date(b.date)); 
+
+        try {
+            for (const sale of pendingSales) {
+                if (remainingAmount <= 0) break;
+
+                const currentPaid = Number(sale.amountPaid || 0);
+                const currentTotal = Number(sale.total || 0);
+                const pendingOnBill = currentTotal - currentPaid;
+
+                let payForThisBill = 0;
+
+                if (remainingAmount >= pendingOnBill) {
+                    payForThisBill = pendingOnBill;
+                    remainingAmount -= pendingOnBill;
+                } else {
+                    payForThisBill = remainingAmount;
+                    remainingAmount = 0;
+                }
+
+                const newPaid = currentPaid + payForThisBill;
+                const newBalance = currentTotal - newPaid;
+                const newStatus = newBalance <= 1 ? "Paid" : "Partial"; 
+
+                // Use resolved ID here as well
+                const dbId = resolveMongoId(sales, sale.saleId, sale);
+                
+                await apiRequest(`sales/${dbId}`, "PUT", {
+                    ...sale,
+                    amountPaid: newPaid,
+                    balanceDue: newBalance,
+                    paymentStatus: newStatus
+                });
+            }
+
+            await apiRequest("receipts", "POST", { 
+                ...paymentData, 
+                id: `REC-${Date.now()}`,
+                note: remainingAmount > 0 ? "Advance / Overpayment" : "Bill Payment"
+            });
+
+            toast.success("Payment Success! Ledger & Sales Updated.");
+            await refreshAllData();
+
+        } catch (error) {
+            console.error("Payment Update Failed:", error);
+            toast.error("Failed to update sales records");
+        }
+    }
+
     // 8. SETTINGS UPDATE
     async function updateSettings(newSettings) {
         try {
@@ -414,6 +481,8 @@ export function StoreProvider({ user, children }) {
         addSale, updateSale, deleteSale,
         addReceipt, deleteReceipt,
         addPayment, deletePayment,
+        
+        receivePayment 
     };
 
     return (
