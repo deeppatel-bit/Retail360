@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext"; 
 
-// 👇 Note: Have apne direct fetch vaprisu jethi URL no issue na aave
 // import api from "../../utils/api"; 
 
 export default function LoginPage({ onLogin }) {
@@ -98,6 +97,15 @@ export default function LoginPage({ onLogin }) {
 
             {/* Right Side - Login Form */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background relative">
+                
+                <button
+                    onClick={() => navigate("/")}
+                    className="absolute top-8 left-8 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors z-20"
+                >
+                    <ArrowLeft size={20} />
+                    <span className="font-medium">Back</span>
+                </button>
+
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
