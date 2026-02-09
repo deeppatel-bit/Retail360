@@ -3,13 +3,25 @@ import { X, Save, RefreshCw, Lock, Unlock } from "lucide-react";
 import { useDialog } from "../../context/DialogContext";
 
 export default function StoreForm({ initialData, onSave, onCancel }) {
-    // આજના તારીખ (YYYY-MM-DD)
-    const today = new Date().toISOString().split("T")[0];
 
-    // ડિફોલ્ટ એક્સપાયરી (1 વર્ષ પછી)
-    const defaultExpiry = new Date();
-    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
-    const defaultExpiryStr = defaultExpiry.toISOString().split("T")[0];
+    // ✅ આજની તારીખ મેળવો (YYYY-MM-DD ફોર્મેટમાં)
+    const getTodayDate = () => new Date().toISOString().split("T")[0];
+
+    // ✅ પ્લાન અને સ્ટાર્ટ ડેટ મુજબ એક્સપાયરી ડેટ ગણવાનું ફંક્શન
+    const calculateExpiry = (plan, startDateVal) => {
+        if (!startDateVal) return "";
+        const date = new Date(startDateVal);
+
+        if (plan === "Monthly") {
+            date.setMonth(date.getMonth() + 1);
+        } else if (plan === "Yearly") {
+            date.setFullYear(date.getFullYear() + 1);
+        } else if (plan === "Lifetime") {
+            date.setFullYear(date.getFullYear() + 100);
+        }
+
+        return date.toISOString().split("T")[0];
+    };
 
     const [formData, setFormData] = useState({
         storeId: "",
@@ -20,8 +32,8 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         email: "",
         address: "",
         planType: "Yearly",
-        startDate: today,
-        expiryDate: defaultExpiryStr,
+        startDate: getTodayDate(),
+        expiryDate: calculateExpiry("Yearly", getTodayDate()), // Default expiry
         status: "active",
     });
 
@@ -44,38 +56,24 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         setFormData((prev) => ({ ...prev, storeId: randomId, password: randomPass }));
     }
 
-    // ✅ New: Handle Change with Auto-Calculation Logic inside
+    // ✅ UPDATED: Handle Change Logic
     function handleChange(e) {
         const { name, value } = e.target;
 
         setFormData(prev => {
-            const newData = { ...prev, [name]: value };
+            let newData = { ...prev, [name]: value };
 
-            // જો Plan અથવા Start Date બદલાય, તો Expiry Date ફરી ગણો
-            if (name === "planType" || name === "startDate") {
-                const plan = name === "planType" ? value : prev.planType;
-                const start = name === "startDate" ? value : prev.startDate;
-
-                if (start) {
-                    const startDateObj = new Date(start);
-                    let expiryDateObj = new Date(startDateObj);
-
-                    if (plan === "Monthly") {
-                        expiryDateObj.setMonth(expiryDateObj.getMonth() + 1);
-                    } else if (plan === "Yearly") {
-                        expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 1);
-                    } else if (plan === "Lifetime") {
-                        expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 100);
-                    }
-
-                    // તારીખ સેટ કરો
-                    try {
-                        newData.expiryDate = expiryDateObj.toISOString().split("T")[0];
-                    } catch (err) {
-                        console.error("Date Error:", err);
-                    }
-                }
+            // 1. જો પ્લાન બદલાય, તો Start Date "આજની" કરો અને Expiry ફરી ગણો
+            if (name === "planType") {
+                const today = getTodayDate();
+                newData.startDate = today; // Start date reset to Today
+                newData.expiryDate = calculateExpiry(value, today);
             }
+            // 2. જો Start Date બદલાય, તો Expiry ફરી ગણો
+            else if (name === "startDate") {
+                newData.expiryDate = calculateExpiry(prev.planType, value);
+            }
+
             return newData;
         });
     }
@@ -172,7 +170,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                         </div>
                     </section>
 
-                    {/* ✅ Subscription Section (Updated) */}
+                    {/* ✅ Subscription Section (Auto-Date Logic Applied) */}
                     <section>
                         <h3 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4">Subscription & License</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
