@@ -3,6 +3,14 @@ import { X, Save, RefreshCw, Lock, Unlock } from "lucide-react";
 import { useDialog } from "../../context/DialogContext";
 
 export default function StoreForm({ initialData, onSave, onCancel }) {
+    // આજના તારીખ (YYYY-MM-DD)
+    const today = new Date().toISOString().split("T")[0];
+
+    // ડિફોલ્ટ એક્સપાયરી (1 વર્ષ પછી)
+    const defaultExpiry = new Date();
+    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+    const defaultExpiryStr = defaultExpiry.toISOString().split("T")[0];
+
     const [formData, setFormData] = useState({
         storeId: "",
         password: "",
@@ -12,8 +20,8 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         email: "",
         address: "",
         planType: "Yearly",
-        startDate: new Date().toISOString().split("T")[0],
-        expiryDate: "", // Will be calculated
+        startDate: today,
+        expiryDate: defaultExpiryStr,
         status: "active",
     });
 
@@ -27,8 +35,6 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         } else {
             generateCredentials();
             setCredentialsLocked(false);
-            // Default: Yearly Plan starting Today
-            calculateExpiry("Yearly", new Date().toISOString().split("T")[0]);
         }
     }, [initialData]);
 
@@ -38,42 +44,40 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         setFormData((prev) => ({ ...prev, storeId: randomId, password: randomPass }));
     }
 
-    // ✅ New: Calculate Expiry Date based on Plan
-    const calculateExpiry = (plan, start) => {
-        if (!start) return;
-        const startDateObj = new Date(start);
-        let expiryDateObj = new Date(startDateObj);
-
-        if (plan === "Monthly") {
-            expiryDateObj.setMonth(expiryDateObj.getMonth() + 1);
-        } else if (plan === "Yearly") {
-            expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 1);
-        } else if (plan === "Lifetime") {
-            expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 100); // 100 Years
-        }
-
-        const expiryISO = expiryDateObj.toISOString().split("T")[0];
-
-        setFormData(prev => ({
-            ...prev,
-            planType: plan,
-            startDate: start,
-            expiryDate: expiryISO
-        }));
-    };
-
-    // ✅ Updated Handle Change
+    // ✅ New: Handle Change with Auto-Calculation Logic inside
     function handleChange(e) {
         const { name, value } = e.target;
 
-        // If Plan or Start Date changes, recalculate expiry
-        if (name === "planType") {
-            calculateExpiry(value, formData.startDate);
-        } else if (name === "startDate") {
-            calculateExpiry(formData.planType, value);
-        } else {
-            setFormData((prev) => ({ ...prev, [name]: value }));
-        }
+        setFormData(prev => {
+            const newData = { ...prev, [name]: value };
+
+            // જો Plan અથવા Start Date બદલાય, તો Expiry Date ફરી ગણો
+            if (name === "planType" || name === "startDate") {
+                const plan = name === "planType" ? value : prev.planType;
+                const start = name === "startDate" ? value : prev.startDate;
+
+                if (start) {
+                    const startDateObj = new Date(start);
+                    let expiryDateObj = new Date(startDateObj);
+
+                    if (plan === "Monthly") {
+                        expiryDateObj.setMonth(expiryDateObj.getMonth() + 1);
+                    } else if (plan === "Yearly") {
+                        expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 1);
+                    } else if (plan === "Lifetime") {
+                        expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 100);
+                    }
+
+                    // તારીખ સેટ કરો
+                    try {
+                        newData.expiryDate = expiryDateObj.toISOString().split("T")[0];
+                    } catch (err) {
+                        console.error("Date Error:", err);
+                    }
+                }
+            }
+            return newData;
+        });
     }
 
     function handleSubmit(e) {
@@ -84,7 +88,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
     async function handleUnlockCredentials() {
         const confirmed = await dialog.confirm({
             title: "Edit Credentials?",
-            message: "Changing the Store ID or Password will require the store owner to login again with the new details. Are you sure?",
+            message: "Changing the Store ID or Password will require the store owner to login again. Are you sure?",
             type: "warning",
             confirmText: "Yes, Unlock",
         });
@@ -112,56 +116,23 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1">Store Name</label>
-                                <input
-                                    type="text"
-                                    name="storeName"
-                                    value={formData.storeName}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                                    required
-                                />
+                                <input type="text" name="storeName" value={formData.storeName} onChange={handleChange} className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1">Owner Name</label>
-                                <input
-                                    type="text"
-                                    name="ownerName"
-                                    value={formData.ownerName}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                                    required
-                                />
+                                <input type="text" name="ownerName" value={formData.ownerName} onChange={handleChange} className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1">Mobile Number</label>
-                                <input
-                                    type="tel"
-                                    name="mobile"
-                                    value={formData.mobile}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                                    required
-                                />
+                                <input type="tel" name="mobile" value={formData.mobile} onChange={handleChange} className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1">Email ID</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                                />
+                                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground" />
                             </div>
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-foreground mb-1">Address / City</label>
-                                <input
-                                    type="text"
-                                    name="address"
-                                    value={formData.address}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
-                                />
+                                <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground" />
                             </div>
                         </div>
                     </section>
@@ -177,22 +148,13 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                                     </span>
                                 )}
                             </div>
-
                             <div className="flex items-center gap-2">
                                 {credentialsLocked ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleUnlockCredentials}
-                                        className="text-xs flex items-center gap-1 text-primary hover:text-primary/90 font-medium bg-card px-2 py-1 rounded border border-primary/20 shadow-sm"
-                                    >
+                                    <button type="button" onClick={handleUnlockCredentials} className="text-xs flex items-center gap-1 text-primary hover:text-primary/90 font-medium bg-card px-2 py-1 rounded border border-primary/20 shadow-sm">
                                         <Unlock size={12} /> Edit Credentials
                                     </button>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={generateCredentials}
-                                        className="text-xs flex items-center gap-1 text-primary hover:text-primary/90 font-medium"
-                                    >
+                                    <button type="button" onClick={generateCredentials} className="text-xs flex items-center gap-1 text-primary hover:text-primary/90 font-medium">
                                         <RefreshCw size={14} /> Auto-Generate
                                     </button>
                                 )}
@@ -200,30 +162,12 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-foreground mb-1">Store ID (Unique)</label>
-                                <input
-                                    type="text"
-                                    name="storeId"
-                                    value={formData.storeId}
-                                    onChange={handleChange}
-                                    className={`w-full px-4 py-2 border border-input rounded-lg outline-none font-mono transition-colors ${credentialsLocked ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                        }`}
-                                    required
-                                    readOnly={credentialsLocked}
-                                />
+                                <label className="block text-sm font-medium text-foreground mb-1">Store ID</label>
+                                <input type="text" name="storeId" value={formData.storeId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg bg-background" readOnly={credentialsLocked} required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-1">Password</label>
-                                <input
-                                    type="text"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    className={`w-full px-4 py-2 border border-input rounded-lg outline-none font-mono transition-colors ${credentialsLocked ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                        }`}
-                                    required
-                                    readOnly={credentialsLocked}
-                                />
+                                <input type="text" name="password" value={formData.password} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg bg-background" readOnly={credentialsLocked} required />
                             </div>
                         </div>
                     </section>
@@ -240,9 +184,9 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                                     onChange={handleChange}
                                     className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
                                 >
-                                    <option value="Monthly">Monthly</option>
-                                    <option value="Yearly">Yearly</option>
-                                    <option value="Lifetime">Lifetime</option>
+                                    <option value="Monthly">Monthly (1 Month)</option>
+                                    <option value="Yearly">Yearly (1 Year)</option>
+                                    <option value="Lifetime">Lifetime (100 Years)</option>
                                 </select>
                             </div>
                             <div>
@@ -261,7 +205,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                                     type="date"
                                     name="expiryDate"
                                     value={formData.expiryDate}
-                                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} // Allow manual override
+                                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
                                     className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground font-semibold text-emerald-600"
                                 />
                             </div>
@@ -271,8 +215,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                                     name="status"
                                     value={formData.status}
                                     onChange={handleChange}
-                                    className={`w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none font-medium bg-background ${formData.status === 'active' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
-                                        }`}
+                                    className="w-full px-4 py-2 border border-input rounded-lg bg-background text-foreground"
                                 >
                                     <option value="active">Active</option>
                                     <option value="suspended">Suspended</option>
@@ -282,19 +225,9 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                     </section>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                        <button
-                            type="button"
-                            onClick={onCancel}
-                            className="px-6 py-2.5 rounded-xl border border-input text-foreground font-medium hover:bg-accent transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 shadow-lg shadow-primary/20 transition-colors flex items-center gap-2"
-                        >
-                            <Save size={18} />
-                            Save Store Details
+                        <button type="button" onClick={onCancel} className="px-6 py-2.5 rounded-xl border border-input text-foreground font-medium hover:bg-accent">Cancel</button>
+                        <button type="submit" className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 flex items-center gap-2">
+                            <Save size={18} /> Save Store Details
                         </button>
                     </div>
                 </form>
