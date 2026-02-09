@@ -4,15 +4,11 @@ import { Save } from "lucide-react";
 
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
-// ✅ 1. SearchableDropdown ઈમ્પોર્ટ કરો
-import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function PaymentForm() {
-    // ✅ 2. suppliers ને StoreContext માંથી લાવો
-    const { addPayment, suppliers } = useStore();
+    const { addPayment } = useStore();
     const toast = useToast();
     const navigate = useNavigate();
-
     const [supplierName, setSupplierName] = useState("");
     const [amount, setAmount] = useState("");
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -44,12 +40,12 @@ export default function PaymentForm() {
             <form onSubmit={handleSubmit} className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
                 <div>
                     <label className="block text-sm font-medium text-foreground mb-1">Supplier Name</label>
-                    {/* ✅ 3. Input ની જગ્યાએ SearchableDropdown મૂકો */}
-                    <SearchableDropdown
-                        options={suppliers.map((s) => ({ value: s.name, label: s.name }))}
+                    <input
                         value={supplierName}
-                        onChange={(val) => setSupplierName(val)}
-                        placeholder="Select or type supplier name..."
+                        onChange={e => setSupplierName(e.target.value)}
+                        className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-red-500 outline-none bg-background text-foreground"
+                        placeholder="Who did you pay?"
+                        required
                     />
                 </div>
 
