@@ -4,11 +4,15 @@ import { Save } from "lucide-react";
 
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
+// ✅ 1. SearchableDropdown ઈમ્પોર્ટ કરો
+import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function ReceiptForm() {
-    const { addReceipt } = useStore();
+    // ✅ 2. ledgers (customers) ને StoreContext માંથી લાવો
+    const { addReceipt, ledgers } = useStore();
     const toast = useToast();
     const navigate = useNavigate();
+
     const [customerName, setCustomerName] = useState("");
     const [amount, setAmount] = useState("");
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -40,12 +44,12 @@ export default function ReceiptForm() {
             <form onSubmit={handleSubmit} className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
                 <div>
                     <label className="block text-sm font-medium text-foreground mb-1">Customer Name</label>
-                    <input
+                    {/* ✅ 3. Input ની જગ્યાએ SearchableDropdown મૂકો */}
+                    <SearchableDropdown
+                        options={ledgers.map((customer) => ({ value: customer.name, label: customer.name }))}
                         value={customerName}
-                        onChange={e => setCustomerName(e.target.value)}
-                        className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-background text-foreground"
-                        placeholder="Who paid you?"
-                        required
+                        onChange={(val) => setCustomerName(val)}
+                        placeholder="Select or type customer name..."
                     />
                 </div>
 
