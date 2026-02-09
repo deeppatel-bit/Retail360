@@ -59,7 +59,6 @@ export default function AdminLayout({ children, onLogout, activeTab, onTabChange
                     <div className="flex items-center gap-4">
                         <div className="text-right">
                             <p className="text-sm font-medium text-foreground">Super Admin</p>
-                            <p className="text-xs text-muted-foreground">admin@retail360.com</p>
                         </div>
                         <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
                             SA
