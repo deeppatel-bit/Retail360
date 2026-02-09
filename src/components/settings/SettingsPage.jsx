@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Save, Store, User, MapPin, Phone, FileText } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+// ✅ Crown અને Clock આઈકન ઈમ્પોર્ટ કર્યા
+import { Save, Store, User, MapPin, Phone, FileText, Crown, Clock } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
 
@@ -18,21 +19,26 @@ export default function SettingsPage() {
         gst: ""
     });
 
-    // 1. ડેટા લોડ કરો (નામના તફાવતને હેન્ડલ કરો)
+    // 1. ડેટા લોડ કરો
     useEffect(() => {
         if (settings) {
             setFormData({
                 storeName: settings.storeName || "",
                 ownerName: settings.ownerName || "",
-                // backend માં phone કે mobile જે પણ હોય તે લો
-                mobile: settings.phone || settings.mobile || "", 
+                mobile: settings.phone || settings.mobile || "",
                 email: settings.email || "",
                 address: settings.address || "",
-                // backend માં gstNo કે gst જે પણ હોય તે લો
-                gst: settings.gstNo || settings.gst || "" 
+                gst: settings.gstNo || settings.gst || ""
             });
         }
     }, [settings]);
+
+    // ✅ Expiry Days Calculation (બાકી દિવસો ગણવા)
+    const daysLeft = useMemo(() => {
+        if (!settings.expiryDate) return 0;
+        const diff = new Date(settings.expiryDate) - new Date();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }, [settings.expiryDate]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -44,19 +50,14 @@ export default function SettingsPage() {
 
         try {
             const token = localStorage.getItem("token");
-            
-            // ✅ FIX: બેકએન્ડ માટે પેલોડ તૈયાર કરો
-            // અહીં આપણે phone અને mobile બંને મોકલીએ છીએ જેથી ડેટા લોસ ન થાય
+
             const apiPayload = {
                 storeName: formData.storeName,
                 ownerName: formData.ownerName,
                 email: formData.email,
                 address: formData.address,
-                
-                // બંને નામ મોકલો (સેફટી માટે)
-                phone: formData.mobile, 
+                phone: formData.mobile,
                 mobile: formData.mobile,
-                
                 gstNo: formData.gst,
                 gst: formData.gst
             };
@@ -76,10 +77,9 @@ export default function SettingsPage() {
                 throw new Error(data.error || "Failed to update settings");
             }
 
-            // 3. ✅ GLOBAL STATE UPDATE (તરત જ રિફ્લેક્ટ કરવા માટે)
             setSettings((prev) => ({
                 ...prev,
-                ...apiPayload // નવો ડેટા સેટ કરો
+                ...apiPayload
             }));
 
             toast.success("Settings updated successfully!");
@@ -97,6 +97,38 @@ export default function SettingsPage() {
         <div className="max-w-4xl mx-auto space-y-6">
             <h2 className="text-2xl font-bold text-foreground">Store Settings</h2>
 
+            {/* ✅ NEW: SUBSCRIPTION BANNER (અહીં ઉમેર્યું) */}
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-xl shadow-lg border border-slate-700 relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
+                            <Crown size={32} className="text-yellow-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold">Current Plan: {settings.planType || "Free"}</h3>
+                            <p className="text-slate-300 text-sm">
+                                Valid until: <span className="font-mono text-white font-medium">
+                                    {settings.expiryDate ? new Date(settings.expiryDate).toLocaleDateString('en-GB') : "N/A"}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-lg backdrop-blur-sm border border-white/10">
+                        <Clock className={daysLeft < 30 ? "text-red-400" : "text-emerald-400"} />
+                        <div className="text-right">
+                            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Status</p>
+                            <p className={`text-lg font-bold ${daysLeft < 30 ? "text-red-400" : "text-emerald-400"}`}>
+                                {daysLeft < 0 ? "Expired" : `${daysLeft} Days Left`}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {/* Decoration */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            </div>
+
+            {/* Store Profile Form */}
             <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
                 <div className="p-6 border-b border-border bg-muted/30">
                     <div className="flex items-center gap-4">
