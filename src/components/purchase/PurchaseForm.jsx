@@ -7,12 +7,12 @@ import { useStore } from "../../context/StoreContext";
 import SearchableDropdown from "../common/SearchableDropdown";
 
 export default function PurchaseForm({ editMode }) {
-  const { products, suppliers, addPurchase, updatePurchase, purchases } = useStore();
+  // ✅ addSupplier ફંક્શન પણ StoreContext માંથી લાવો
+  const { products, suppliers, addPurchase, updatePurchase, purchases, addSupplier } = useStore();
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
 
-  // If editMode, fetch existing purchase
   const [initial, setInitial] = useState(null);
 
   useEffect(() => {
@@ -28,18 +28,13 @@ export default function PurchaseForm({ editMode }) {
     initial ? new Date(initial.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
 
-  // ✅ Initialize lines with empty strings for editable fields
   const [lines, setLines] = useState(
     initial?.lines || [
       { productId: "", qty: "", price: "", taxPercent: "", discountPercent: "" }
     ]
   );
 
-  const [taxPercent, setTaxPercent] = useState(initial?.taxPercent || "");
-  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent || "");
   const [notes, setNotes] = useState(initial?.notes || "");
-
-  // ✅ Payment State (Empty string default)
   const [amountPaid, setAmountPaid] = useState(
     initial?.amountPaid !== undefined ? initial.amountPaid : ""
   );
@@ -50,10 +45,9 @@ export default function PurchaseForm({ editMode }) {
       setSupplierName(initial.supplierName || "");
       setBillNo(initial.billNo || "");
       setDate(new Date(initial.date).toISOString().slice(0, 10));
-      
+
       const loadedLines = (initial.lines || []).map((ln) => ({
         ...ln,
-        // Keep existing values or fetch from product, but convert 0 to "" if needed (optional, keeping as is for edit)
         price: ln.price !== undefined ? ln.price : (products.find((p) => p.id === ln.productId)?.costPrice || ""),
         qty: ln.qty || "",
         taxPercent: ln.taxPercent || "",
@@ -64,8 +58,7 @@ export default function PurchaseForm({ editMode }) {
       setNotes(initial.notes || "");
       setAmountPaid(initial.amountPaid !== undefined ? initial.amountPaid : "");
       setPaymentMode(initial.paymentMode || "Cash");
-    } 
-    // eslint-disable-next-line
+    }
   }, [initial, products]);
 
   function changeLine(i, key, val) {
@@ -73,11 +66,10 @@ export default function PurchaseForm({ editMode }) {
       s.map((ln, idx) => {
         if (idx !== i) return ln;
         const newLn = { ...ln, [key]: val };
-        
-        // Auto-fill cost price when product selected
+
         if (key === "productId") {
           const p = products.find((x) => x.id === val);
-          newLn.price = p ? p.costPrice : ""; // Set default price
+          newLn.price = p ? p.costPrice : "";
         }
         return newLn;
       })
@@ -95,7 +87,6 @@ export default function PurchaseForm({ editMode }) {
     setLines((s) => s.filter((_, i) => i !== idx));
   }
 
-  // Calculate totals (Using Number() to handle empty strings safely)
   let subtotal = 0;
   let totalDiscount = 0;
   let totalTax = 0;
@@ -119,28 +110,50 @@ export default function PurchaseForm({ editMode }) {
 
   const total = subtotal - totalDiscount + totalTax;
 
-  function handleSave() {
+  // ✅ New Logic: Check and Create Supplier
+  const handleSave = async () => {
     if (!supplierName) return toast.error("Supplier required");
     if (!lines.length) return toast.error("Add lines");
     for (const ln of lines) {
       if (!ln.productId) return toast.error("Choose product for each line");
     }
 
-    // Convert empty strings to numbers before saving
+    // 1. Check if supplier exists
+    const existingSupplier = suppliers.find(
+      s => s.name.toLowerCase() === supplierName.toLowerCase()
+    );
+
+    // 2. If not exists, create new supplier
+    if (!existingSupplier) {
+      const confirmNew = window.confirm(`"${supplierName}" is a new supplier. Do you want to add them?`);
+      if (confirmNew) {
+        // Add basic details for new supplier
+        await addSupplier({
+          name: supplierName,
+          mobile: "",
+          gst: "",
+          address: ""
+        });
+        toast.success(`New supplier "${supplierName}" added!`);
+      } else {
+        return; // Stop if user cancels
+      }
+    }
+
     const finalAmountPaid = Number(amountPaid) || 0;
-    
+
     let paymentStatus = "Unpaid";
     if (finalAmountPaid >= total) paymentStatus = "Paid";
     else if (finalAmountPaid > 0) paymentStatus = "Partial";
-    
+
     const balanceDue = Math.max(0, total - finalAmountPaid);
 
     const cleanLines = lines.map(ln => ({
-        ...ln,
-        qty: Number(ln.qty) || 0,
-        price: Number(ln.price) || 0,
-        discountPercent: Number(ln.discountPercent) || 0,
-        taxPercent: Number(ln.taxPercent) || 0
+      ...ln,
+      qty: Number(ln.qty) || 0,
+      price: Number(ln.price) || 0,
+      discountPercent: Number(ln.discountPercent) || 0,
+      taxPercent: Number(ln.taxPercent) || 0
     }));
 
     const payload = {
@@ -148,7 +161,7 @@ export default function PurchaseForm({ editMode }) {
       billNo,
       date: new Date(date).toISOString(),
       lines: cleanLines,
-      taxPercent: 0, // Global fields deprecated
+      taxPercent: 0,
       discountPercent: 0,
       notes,
       amountPaid: finalAmountPaid,
@@ -157,13 +170,9 @@ export default function PurchaseForm({ editMode }) {
       balanceDue,
     };
 
-   if (editMode && id) {
-      // ✅ FIX: જો initial ડેટા હોય તો તેનું સાચું _id વાપરો, નહિતર URL id વાપરો
-      const dbId = initial?._id || id; 
-      
-      // સાચા ID સાથે અપડેટ કરો
-      updatePurchase(dbId, payload); 
-      
+    if (editMode && id) {
+      const dbId = initial?._id || id;
+      updatePurchase(dbId, payload);
       toast.success("Purchase updated successfully");
     } else {
       addPurchase(payload);
@@ -185,15 +194,16 @@ export default function PurchaseForm({ editMode }) {
       </div>
 
       <div className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
-        {/* Header Info */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Supplier</label>
+            {/* ✅ Allow Custom Value Enabled */}
             <SearchableDropdown
               options={suppliers.map((sup) => ({ value: sup.name, label: sup.name }))}
               value={supplierName}
               onChange={(val) => setSupplierName(val)}
-              placeholder="Search or select supplier..."
+              placeholder="Select or type new supplier..."
+              allowCustomValue={true}
             />
           </div>
           <div>
@@ -216,7 +226,9 @@ export default function PurchaseForm({ editMode }) {
           </div>
         </div>
 
-        {/* Items Table */}
+        {/* ... Rest of the form (Items Table, Footer) remains exactly same ... */}
+        {/* I am omitting the middle part to keep code clean, just ensure the return closes properly */}
+
         <div className="border border-border rounded-lg overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-muted/50 text-foreground font-semibold">
@@ -236,7 +248,7 @@ export default function PurchaseForm({ editMode }) {
                 {lines.map((ln, i) => {
                   const p = products.find((x) => x.id === ln.productId);
                   const stock = p ? p.stock : 0;
-                  
+
                   return (
                     <motion.tr
                       key={i}
@@ -263,41 +275,41 @@ export default function PurchaseForm({ editMode }) {
                         <input
                           type="number"
                           value={ln.price}
-                          onChange={(e) => changeLine(i, "price", e.target.value)} // ✅ Allow empty string
+                          onChange={(e) => changeLine(i, "price", e.target.value)}
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
                           step="0.01"
-                          placeholder="0.00" // ✅ Placeholder added
+                          placeholder="0.00"
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.qty}
-                          onChange={(e) => changeLine(i, "qty", e.target.value)} // ✅ Allow empty string
+                          onChange={(e) => changeLine(i, "qty", e.target.value)}
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="1"
-                          placeholder="0" // ✅ Placeholder added
+                          placeholder="0"
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.discountPercent}
-                          onChange={(e) => changeLine(i, "discountPercent", e.target.value)} // ✅ Allow empty string
+                          onChange={(e) => changeLine(i, "discountPercent", e.target.value)}
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
-                          placeholder="0" // ✅ Placeholder added
+                          placeholder="0"
                         />
                       </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           value={ln.taxPercent}
-                          onChange={(e) => changeLine(i, "taxPercent", e.target.value)} // ✅ Allow empty string
+                          onChange={(e) => changeLine(i, "taxPercent", e.target.value)}
                           className="w-full border border-input px-3 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
                           min="0"
-                          placeholder="0" // ✅ Placeholder added
+                          placeholder="0"
                         />
                       </td>
                       <td className="px-4 py-2 text-right font-medium text-foreground">
@@ -305,7 +317,7 @@ export default function PurchaseForm({ editMode }) {
                           (Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100 +
                           ((Number(ln.qty || 0) * Number(ln.price || 0)) -
                             (Number(ln.qty || 0) * Number(ln.price || 0) * Number(ln.discountPercent || 0)) / 100) *
-                            Number(ln.taxPercent || 0) / 100).toFixed(2)}
+                          Number(ln.taxPercent || 0) / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-2 text-center">
                         <button
@@ -342,7 +354,6 @@ export default function PurchaseForm({ editMode }) {
           </div>
         </div>
 
-        {/* Footer Totals */}
         <div className="flex flex-col md:flex-row justify-end items-start md:items-center gap-8 pt-4 border-t border-border">
           <div className="w-full md:w-64 space-y-3">
             <div>
@@ -403,9 +414,9 @@ export default function PurchaseForm({ editMode }) {
                 <input
                   type="number"
                   value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)} // ✅ Allow empty string
+                  onChange={(e) => setAmountPaid(e.target.value)}
                   className="w-full border-input border pl-8 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-background text-foreground"
-                  placeholder="0.00" // ✅ Placeholder added
+                  placeholder="0.00"
                 />
               </div>
             </div>
@@ -425,7 +436,7 @@ export default function PurchaseForm({ editMode }) {
             </div>
           </div>
           <div className="mt-2 text-right text-sm font-medium text-muted-foreground">
-            Balance Due: <span className="text-destructive">₹ {Math.max(0, total - (Number(amountPaid)||0)).toFixed(2)}</span>
+            Balance Due: <span className="text-destructive">₹ {Math.max(0, total - (Number(amountPaid) || 0)).toFixed(2)}</span>
           </div>
         </div>
 
