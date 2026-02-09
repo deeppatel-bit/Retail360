@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import StatCard from "../StatCard";
-import { DollarSign, Package, AlertTriangle, TrendingUp, ShoppingBag, PackageX } from "lucide-react";
+// ✅ Crown અને Clock આઈકન ઉમેર્યા
+import { DollarSign, Package, AlertTriangle, TrendingUp, ShoppingBag, PackageX, Crown, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useStore } from "../../context/StoreContext";
 
@@ -29,7 +30,8 @@ const itemVariants = {
 
 
 export default function Dashboard() {
-  const { products, purchases, sales } = useStore();
+  // ✅ settings અને user ને destructure કર્યા
+  const { products, purchases, sales, settings, user } = useStore();
   const navigate = useNavigate();
   const todayISO = new Date().toISOString().slice(0, 10);
 
@@ -53,6 +55,13 @@ export default function Dashboard() {
     return `${names.slice(0, 3).join(", ")} +${names.length - 3} more`;
   }, [lowStock]);
 
+  // ✅ Expiry Days Calculation Logic
+  const daysLeft = useMemo(() => {
+    if (!settings?.expiryDate) return 0;
+    const diff = new Date(settings.expiryDate) - new Date();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }, [settings?.expiryDate]);
+
   return (
     <motion.div
       className="space-y-8"
@@ -60,6 +69,44 @@ export default function Dashboard() {
       initial="hidden"
       animate="visible"
     >
+      {/* ✅ NEW: SUBSCRIPTION BANNER (સૌથી ઉપર મૂક્યું) */}
+      <motion.div
+        variants={itemVariants}
+        className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-700"
+      >
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
+            <Crown size={32} className="text-yellow-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">{settings?.planType || "Free"} Plan Active</h2>
+            <p className="text-slate-300 text-sm">
+              Store ID: <span className="font-mono text-white opacity-80">{user?.storeId || "N/A"}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="relative z-10 flex items-center gap-4 bg-white/5 px-6 py-3 rounded-xl backdrop-blur-sm border border-white/10">
+          <div className="text-right">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Valid Until</p>
+            <p className="text-sm font-medium text-white">
+              {settings?.expiryDate ? new Date(settings.expiryDate).toLocaleDateString('en-GB') : "N/A"}
+            </p>
+          </div>
+          <div className={`h-10 w-[1px] bg-white/20`}></div>
+          <div className="text-right">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Remaining</p>
+            <div className={`flex items-center gap-2 text-lg font-bold ${daysLeft < 30 ? "text-red-400" : "text-emerald-400"}`}>
+              <Clock size={18} />
+              {daysLeft < 0 ? "Expired" : `${daysLeft} Days`}
+            </div>
+          </div>
+        </div>
+
+        {/* Background decoration */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+      </motion.div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <motion.div variants={itemVariants}>
           <StatCard title="Total Sales Today" value={`₹ ${todaysSales.toFixed(2)}`} icon={DollarSign} color="indigo" />
@@ -86,7 +133,7 @@ export default function Dashboard() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* --- RECENT PURCHASES SECTION (Fixed NaN issue) --- */}
+            {/* --- RECENT PURCHASES SECTION --- */}
             <div>
               <div className="font-semibold text-foreground mb-3 flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -94,8 +141,8 @@ export default function Dashboard() {
               </div>
               <ul className="divide-y divide-border">
                 {purchases.slice(0, 6).map((p, idx) => (
-                  <motion.li 
-                    key={p.purchaseId || idx} // Fallback key if ID is missing
+                  <motion.li
+                    key={p.purchaseId || idx}
                     className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
                     whileHover={{ x: 4 }}
                   >
@@ -105,7 +152,6 @@ export default function Dashboard() {
                         {p.date ? new Date(p.date).toLocaleDateString() : "No Date"}
                       </div>
                     </div>
-                    {/* ✅ FIX: Added fallback (Number(p.total) || 0) to prevent NaN */}
                     <div className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
                       ₹ {(Number(p.total) || 0).toFixed(2)}
                     </div>
@@ -127,8 +173,8 @@ export default function Dashboard() {
               </div>
               <ul className="divide-y divide-border">
                 {sales.slice(0, 6).map((s, idx) => (
-                  <motion.li 
-                    key={s.saleId || idx} 
+                  <motion.li
+                    key={s.saleId || idx}
                     className={`py-3 px-2 flex justify-between items-center rounded transition-colors ${idx % 2 === 0 ? 'hover:bg-accent/30' : 'hover:bg-accent/50'}`}
                     whileHover={{ x: 4 }}
                   >
@@ -138,7 +184,6 @@ export default function Dashboard() {
                         {s.date ? new Date(s.date).toLocaleDateString() : "No Date"}
                       </div>
                     </div>
-                    {/* Safety check added here as well */}
                     <div className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">
                       ₹ {(Number(s.total) || 0).toFixed(2)}
                     </div>

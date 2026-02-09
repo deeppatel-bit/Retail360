@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useToast } from "./ToastContext";
 import { useDialog } from "./DialogContext";
-import { nextInvoiceId } from "../utils/storage"; 
+import { nextInvoiceId } from "../utils/storage";
 
 const StoreContext = createContext();
 
@@ -14,7 +14,7 @@ export function StoreProvider({ user, children }) {
     const dialog = useDialog();
 
     // ✅ LIVE Backend URL
-    const API_BASE_URL = "https://smart-store-backend.onrender.com/api"; 
+    const API_BASE_URL = "https://smart-store-backend.onrender.com/api";
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem("token");
@@ -28,38 +28,35 @@ export function StoreProvider({ user, children }) {
     const [isAppLoading, setIsAppLoading] = useState(true);
     const [products, setProducts] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
-    const [ledgers, setLedgers] = useState([]); 
+    const [ledgers, setLedgers] = useState([]);
     const [purchases, setPurchases] = useState([]);
     const [sales, setSales] = useState([]);
     const [receipts, setReceipts] = useState([]);
     const [payments, setPayments] = useState([]);
-    
-    // ✅ Settings State
+
+    // ✅ Settings State (Updated with Plan Details)
     const [settings, setSettings] = useState({
         storeName: user?.storeName || "",
         ownerName: user?.ownerName || "",
         address: user?.address || "",
         phone: user?.phone || user?.mobile || "",
         email: user?.email || "",
-        gst: user?.gst || user?.gstNo || ""
+        gst: user?.gst || user?.gstNo || "",
+        // ✅ New Fields
+        planType: user?.planType || "Free",
+        expiryDate: user?.expiryDate || ""
     });
 
-    // ********** 🛠️ SMART ID RESOLVER (આ એરર ફિક્સ કરશે) **********
-    // આ ફંક્શન ખાતરી કરશે કે આપણે હંમેશા _id (MongoID) જ વાપરીએ
+    // ********** 🛠️ SMART ID RESOLVER **********
     const resolveMongoId = (list, id, data) => {
-        // 1. જો data ની અંદર જ _id હોય, તો તે વાપરો
         if (data && data._id) return data._id;
-        
-        // 2. જો id પોતે MongoID જેવું દેખાય (24 અક્ષરો), તો તે જ વાપરો
         if (id && /^[0-9a-fA-F]{24}$/.test(String(id))) return id;
-
-        // 3. લિસ્ટમાંથી શોધો (Custom ID મેચ થાય તો તેનું _id લો)
         if (Array.isArray(list)) {
-            const found = list.find(item => 
-                String(item.id) === String(id) || 
-                String(item.purchaseId) === String(id) || 
-                String(item.billNo) === String(id) || 
-                String(item.saleId) === String(id) || 
+            const found = list.find(item =>
+                String(item.id) === String(id) ||
+                String(item.purchaseId) === String(id) ||
+                String(item.billNo) === String(id) ||
+                String(item.saleId) === String(id) ||
                 String(item.productId) === String(id) ||
                 String(item.supplierId) === String(id) ||
                 String(item.customerId) === String(id) ||
@@ -67,8 +64,6 @@ export function StoreProvider({ user, children }) {
             );
             if (found && found._id) return found._id;
         }
-
-        // 4. કઈ ન મળે તો જે છે તે પાછું આપો
         return id;
     };
 
@@ -81,10 +76,10 @@ export function StoreProvider({ user, children }) {
             try {
                 const res = await fetch(`${API_BASE_URL}/${endpoint}`, { headers });
                 const contentType = res.headers.get("content-type");
-                
+
                 if (res.ok && contentType && contentType.includes("application/json")) {
                     const data = await res.json();
-                    return Array.isArray(data) ? data : []; 
+                    return Array.isArray(data) ? data : [];
                 }
             } catch (e) {
                 console.warn(`Failed to load ${endpoint}:`, e);
@@ -98,7 +93,7 @@ export function StoreProvider({ user, children }) {
                 const res = await fetch(`${API_BASE_URL}/stores/profile`, { headers });
                 if (res.ok) {
                     const data = await res.json();
-                    return data; 
+                    return data;
                 }
             } catch (e) {
                 console.warn("Failed to load profile:", e);
@@ -132,8 +127,11 @@ export function StoreProvider({ user, children }) {
                     ownerName: profileData.ownerName || "",
                     address: profileData.address || "",
                     email: profileData.email || "",
-                    phone: profileData.phone || profileData.mobile || "", 
-                    gst: profileData.gst || profileData.gstNo || ""
+                    phone: profileData.phone || profileData.mobile || "",
+                    gst: profileData.gst || profileData.gstNo || "",
+                    // ✅ Map Plan Data from Backend
+                    planType: profileData.planType || "Free",
+                    expiryDate: profileData.expiryDate || ""
                 });
             }
 
@@ -149,12 +147,11 @@ export function StoreProvider({ user, children }) {
         if (token) {
             refreshAllData();
         }
-    }, [refreshAllData]); 
+    }, [refreshAllData]);
 
     // ********** HELPER: GENERIC API REQUEST **********
     const apiRequest = async (endpoint, method, body = null) => {
         try {
-            // Prevent bad requests
             if (endpoint.includes("undefined") || endpoint.includes("null")) {
                 throw new Error("Invalid ID: Operation cancelled.");
             }
@@ -185,12 +182,12 @@ export function StoreProvider({ user, children }) {
     };
 
     // ********** CRUD OPERATIONS **********
-    
+
     // 2. PRODUCTS
     async function addOrUpdateProduct(form) {
         try {
             const dbId = resolveMongoId(products, form.id, form);
-            
+
             if (form.id || (dbId && dbId !== form.id)) {
                 await apiRequest(`products/${dbId}`, "PUT", form);
                 toast.success("Product updated");
@@ -198,8 +195,8 @@ export function StoreProvider({ user, children }) {
                 await apiRequest("products", "POST", form);
                 toast.success("Product added");
             }
-            refreshAllData(); 
-        } catch (e) {}
+            refreshAllData();
+        } catch (e) { }
     }
 
     async function deleteProduct(id) {
@@ -209,7 +206,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`products/${dbId}`, "DELETE");
             toast.success("Product deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // 3. SUPPLIERS
@@ -218,7 +215,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest("suppliers", "POST", data);
             toast.success("Supplier added");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function editSupplier(id, data) {
@@ -227,7 +224,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`suppliers/${dbId}`, "PUT", data);
             toast.success("Supplier updated");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function deleteSupplier(id) {
@@ -237,7 +234,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`suppliers/${dbId}`, "DELETE");
             toast.success("Supplier deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // 4. CUSTOMERS
@@ -246,7 +243,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest("customers", "POST", data);
             toast.success("Customer added");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function editLedger(id, data) {
@@ -255,7 +252,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`customers/${dbId}`, "PUT", data);
             toast.success("Customer updated");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function deleteLedger(id) {
@@ -265,7 +262,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`customers/${dbId}`, "DELETE");
             toast.success("Customer deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // 5. PURCHASES
@@ -278,18 +275,17 @@ export function StoreProvider({ user, children }) {
         try {
             await apiRequest("purchases", "POST", payload);
             toast.success("Purchase saved successfully");
-            refreshAllData(); 
-        } catch (e) {}
+            refreshAllData();
+        } catch (e) { }
     }
 
-    // ✅ FIXED UPDATE PURCHASE (This solves the 404 error)
     async function updatePurchase(id, data) {
         try {
             const dbId = resolveMongoId(purchases, id, data);
             await apiRequest(`purchases/${dbId}`, "PUT", data);
             toast.success("Purchase updated");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function deletePurchase(id) {
@@ -299,7 +295,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`purchases/${dbId}`, "DELETE");
             toast.success("Purchase deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // 6. SALES
@@ -314,7 +310,7 @@ export function StoreProvider({ user, children }) {
 
         const payload = {
             ...data,
-            saleId: nextInvoiceId(sales, "SAL"), 
+            saleId: nextInvoiceId(sales, "SAL"),
             date: data.date || new Date().toISOString(),
         };
 
@@ -322,7 +318,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest("sales", "POST", payload);
             toast.success("Sale completed successfully");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function updateSale(id, data) {
@@ -331,7 +327,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`sales/${dbId}`, "PUT", data);
             toast.success("Sale updated");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function deleteSale(id) {
@@ -341,7 +337,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`sales/${dbId}`, "DELETE");
             toast.success("Sale deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // 7. FINANCE
@@ -350,7 +346,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest("receipts", "POST", { ...data, id: `REC-${Date.now()}` });
             toast.success("Receipt added");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
     async function deleteReceipt(id) {
         if (!await dialog.confirm({ title: "Delete Receipt", type: "danger" })) return;
@@ -359,7 +355,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`receipts/${dbId}`, "DELETE");
             toast.success("Receipt deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     async function addPayment(data) {
@@ -367,7 +363,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest("payments", "POST", { ...data, id: `PAY-${Date.now()}` });
             toast.success("Payment added");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
     async function deletePayment(id) {
         if (!await dialog.confirm({ title: "Delete Payment", type: "danger" })) return;
@@ -376,7 +372,7 @@ export function StoreProvider({ user, children }) {
             await apiRequest(`payments/${dbId}`, "DELETE");
             toast.success("Payment deleted");
             refreshAllData();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // ✅ RECEIVE PAYMENT (Ledger Logic)
@@ -391,7 +387,7 @@ export function StoreProvider({ user, children }) {
                 const sName = s.customerName ? s.customerName.trim().toLowerCase() : "";
                 return sName === cleanName && s.paymentStatus !== "Paid";
             })
-            .sort((a, b) => new Date(a.date) - new Date(b.date)); 
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         try {
             for (const sale of pendingSales) {
@@ -413,11 +409,11 @@ export function StoreProvider({ user, children }) {
 
                 const newPaid = currentPaid + payForThisBill;
                 const newBalance = currentTotal - newPaid;
-                const newStatus = newBalance <= 1 ? "Paid" : "Partial"; 
+                const newStatus = newBalance <= 1 ? "Paid" : "Partial";
 
                 // Use helper to ensure ID
                 const dbId = resolveMongoId(sales, sale.saleId, sale);
-                
+
                 await apiRequest(`sales/${dbId}`, "PUT", {
                     ...sale,
                     amountPaid: newPaid,
@@ -426,8 +422,8 @@ export function StoreProvider({ user, children }) {
                 });
             }
 
-            await apiRequest("receipts", "POST", { 
-                ...paymentData, 
+            await apiRequest("receipts", "POST", {
+                ...paymentData,
                 id: `REC-${Date.now()}`,
                 note: remainingAmount > 0 ? "Advance / Overpayment" : "Bill Payment"
             });
@@ -445,14 +441,14 @@ export function StoreProvider({ user, children }) {
     async function updateSettings(newSettings) {
         try {
             await apiRequest("stores/profile", "PUT", newSettings);
-            
+
             setSettings(prev => ({
                 ...prev,
                 ...newSettings,
                 phone: newSettings.mobile || newSettings.phone || prev.phone,
                 gst: newSettings.gstNo || newSettings.gst || prev.gst
             }));
-            
+
             const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
             localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
 
@@ -464,9 +460,9 @@ export function StoreProvider({ user, children }) {
 
     const value = {
         isAppLoading, refreshAllData,
-        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, 
+        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, user,
         setSettings: updateSettings,
-        
+
         addSupplier, editSupplier, deleteSupplier,
         addLedger, editLedger, deleteLedger,
         addOrUpdateProduct, deleteProduct,
@@ -474,8 +470,8 @@ export function StoreProvider({ user, children }) {
         addSale, updateSale, deleteSale,
         addReceipt, deleteReceipt,
         addPayment, deletePayment,
-        
-        receivePayment 
+
+        receivePayment
     };
 
     return (
