@@ -13,7 +13,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         address: "",
         planType: "Yearly",
         startDate: new Date().toISOString().split("T")[0],
-        expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split("T")[0],
+        expiryDate: "", // Will be calculated
         status: "active",
     });
 
@@ -27,6 +27,8 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         } else {
             generateCredentials();
             setCredentialsLocked(false);
+            // Default: Yearly Plan starting Today
+            calculateExpiry("Yearly", new Date().toISOString().split("T")[0]);
         }
     }, [initialData]);
 
@@ -36,9 +38,42 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
         setFormData((prev) => ({ ...prev, storeId: randomId, password: randomPass }));
     }
 
+    // ✅ New: Calculate Expiry Date based on Plan
+    const calculateExpiry = (plan, start) => {
+        if (!start) return;
+        const startDateObj = new Date(start);
+        let expiryDateObj = new Date(startDateObj);
+
+        if (plan === "Monthly") {
+            expiryDateObj.setMonth(expiryDateObj.getMonth() + 1);
+        } else if (plan === "Yearly") {
+            expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 1);
+        } else if (plan === "Lifetime") {
+            expiryDateObj.setFullYear(expiryDateObj.getFullYear() + 100); // 100 Years
+        }
+
+        const expiryISO = expiryDateObj.toISOString().split("T")[0];
+
+        setFormData(prev => ({
+            ...prev,
+            planType: plan,
+            startDate: start,
+            expiryDate: expiryISO
+        }));
+    };
+
+    // ✅ Updated Handle Change
     function handleChange(e) {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+
+        // If Plan or Start Date changes, recalculate expiry
+        if (name === "planType") {
+            calculateExpiry(value, formData.startDate);
+        } else if (name === "startDate") {
+            calculateExpiry(formData.planType, value);
+        } else {
+            setFormData((prev) => ({ ...prev, [name]: value }));
+        }
     }
 
     function handleSubmit(e) {
@@ -193,7 +228,7 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                         </div>
                     </section>
 
-                    {/* Subscription Section */}
+                    {/* ✅ Subscription Section (Updated) */}
                     <section>
                         <h3 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4">Subscription & License</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -226,8 +261,8 @@ export default function StoreForm({ initialData, onSave, onCancel }) {
                                     type="date"
                                     name="expiryDate"
                                     value={formData.expiryDate}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground"
+                                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} // Allow manual override
+                                    className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-background text-foreground font-semibold text-emerald-600"
                                 />
                             </div>
                             <div>
