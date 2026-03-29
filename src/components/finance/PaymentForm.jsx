@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Save } from "lucide-react";
 
@@ -6,14 +6,35 @@ import { useStore } from "../../context/StoreContext";
 import { useToast } from "../../context/ToastContext";
 
 export default function PaymentForm() {
-    const { addPayment } = useStore();
+    const { addPayment, suppliers } = useStore();
     const toast = useToast();
     const navigate = useNavigate();
+
     const [supplierName, setSupplierName] = useState("");
     const [amount, setAmount] = useState("");
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
     const [mode, setMode] = useState("Cash");
     const [note, setNote] = useState("");
+
+    // ✅ ડ્રોપડાઉન માટેના નવા State
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const wrapperRef = useRef(null);
+
+    // બહાર ક્લિક કરીએ ત્યારે ડ્રોપડાઉન બંધ કરવા માટે
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setShowSuggestions(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // યુઝર જે ટાઈપ કરે એના આધારે લિસ્ટ ફિલ્ટર કરવા માટે
+    const filteredSuppliers = suppliers?.filter(sup =>
+        sup.name.toLowerCase().includes(supplierName.toLowerCase())
+    ) || [];
 
     function handleSubmit(e) {
         e.preventDefault();
@@ -38,15 +59,40 @@ export default function PaymentForm() {
             <h2 className="text-2xl font-bold text-foreground">New Payment (Money Out)</h2>
 
             <form onSubmit={handleSubmit} className="bg-card p-6 rounded-xl shadow-lg border border-border space-y-6">
-                <div>
+
+                {/* ✅ Custom Autocomplete / Dropdown */}
+                <div className="relative" ref={wrapperRef}>
                     <label className="block text-sm font-medium text-foreground mb-1">Supplier Name</label>
                     <input
                         value={supplierName}
-                        onChange={e => setSupplierName(e.target.value)}
-                        className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-red-500 outline-none bg-background text-foreground"
-                        placeholder="Who did you pay?"
+                        onChange={e => {
+                            setSupplierName(e.target.value);
+                            setShowSuggestions(true); // ટાઈપ કરે એટલે લિસ્ટ બતાવે
+                        }}
+                        onFocus={() => setShowSuggestions(true)} // ક્લિક કરે એટલે લિસ્ટ બતાવે
+                        className="w-full border-input border px-4 py-2 rounded-lg focus:ring-2 focus:ring-red-500 outline-none bg-background text-foreground relative z-20"
+                        placeholder="Type or select supplier name..."
                         required
+                        autoComplete="off"
                     />
+
+                    {/* ✅ Suggestions Box (આનાથી તમને લિસ્ટ દેખાશે) */}
+                    {showSuggestions && filteredSuppliers.length > 0 && (
+                        <ul className="absolute z-50 w-full mt-1 bg-background border border-input rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {filteredSuppliers.map((sup) => (
+                                <li
+                                    key={sup.id || sup._id}
+                                    onClick={() => {
+                                        setSupplierName(sup.name);
+                                        setShowSuggestions(false); // નામ સિલેક્ટ થાય એટલે લિસ્ટ બંધ
+                                    }}
+                                    className="px-4 py-2 hover:bg-accent cursor-pointer text-foreground transition-colors"
+                                >
+                                    {sup.name}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -103,13 +149,13 @@ export default function PaymentForm() {
                     <button
                         type="button"
                         onClick={() => navigate("/payments")}
-                        className="px-6 py-2 border border-input text-foreground rounded-lg hover:bg-accent font-medium"
+                        className="px-6 py-2 border border-input text-foreground rounded-lg hover:bg-accent font-medium transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
-                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md font-medium flex items-center gap-2"
+                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md font-medium flex items-center gap-2 transition-colors"
                     >
                         <Save size={18} /> Save Payment
                     </button>
