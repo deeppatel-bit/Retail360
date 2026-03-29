@@ -138,9 +138,8 @@ export default function PurchaseList() {
             <TableHeader columns={columns} sortConfig={sortConfig} onSort={handleSort} />
             <tbody className="divide-y divide-border">
               {paginatedPurchases.map((p) => (
-                <tr 
-                  // ✅ FIX: Use 'id' (virtual) or fallback to purchaseId
-                  key={p.id || p.purchaseId} 
+                <tr
+                  key={p.id || p.purchaseId}
                   className="hover:bg-accent/50 transition-colors group relative border-l-4 border-transparent hover:border-emerald-600"
                 >
                   <td className="p-4 text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : "-"}</td>
@@ -169,10 +168,10 @@ export default function PurchaseList() {
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-3">
-                    <Link to={`/purchase/edit/${p.purchaseId}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm">Edit</Link>
-                    <button 
-                      // ✅ FIX: અહીં p.id વાપરવું ફરજિયાત છે
-                      onClick={() => deletePurchase(p.id)} 
+                    {/* ✅ અહિયાં p.id પાસ કર્યું છે, જેથી MongoDB ને સાચો ID મળે */}
+                    <Link to={`/purchase/edit/${p.id}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-sm">Edit</Link>
+                    <button
+                      onClick={() => deletePurchase(p.id)}
                       className="text-destructive hover:text-destructive/80 font-medium text-sm"
                     >
                       Delete

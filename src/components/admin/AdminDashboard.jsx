@@ -28,7 +28,6 @@ export default function AdminDashboard({ user, onLogout }) {
             setStores(res.data);
         } catch (error) {
             console.error("Error fetching stores:", error);
-            // જો એરર આવે તો ટોસ્ટ બતાવી શકો છો
         }
     }
 
