@@ -474,6 +474,72 @@ export function StoreProvider({ user, children }) {
         receivePayment
     };
 
+    // ✅ PAY SUPPLIER (Supplier Ledger Logic)
+    async function paySupplier(paymentData) {
+        const { supplierName, amount } = paymentData;
+        let remainingAmount = Number(amount);
+
+        const cleanName = supplierName.trim().toLowerCase();
+
+        // 1. બાકી રહેલા Purchases (ખરીદીનાં બિલો) શોધો
+        const pendingPurchases = purchases
+            .filter(p => {
+                const pName = p.supplierName ? p.supplierName.trim().toLowerCase() : "";
+                return pName === cleanName && p.paymentStatus !== "Paid";
+            })
+            .sort((a, b) => new Date(a.date) - new Date(b.date)); // સૌથી જૂનું બિલ પહેલાં
+
+        try {
+            for (const purchase of pendingPurchases) {
+                if (remainingAmount <= 0) break;
+
+                const currentPaid = Number(purchase.amountPaid || 0);
+                const currentTotal = Number(purchase.total || 0);
+                const pendingOnBill = currentTotal - currentPaid;
+
+                let payForThisBill = 0;
+
+                if (remainingAmount >= pendingOnBill) {
+                    payForThisBill = pendingOnBill;
+                    remainingAmount -= pendingOnBill;
+                } else {
+                    payForThisBill = remainingAmount;
+                    remainingAmount = 0;
+                }
+
+                const newPaid = currentPaid + payForThisBill;
+                const newBalance = currentTotal - newPaid;
+                const newStatus = newBalance <= 1 ? "Paid" : "Partial";
+
+                // ડેટાબેઝ ID મેળવો
+                const dbId = resolveMongoId(purchases, purchase.purchaseId, purchase);
+
+                // બિલ અપડેટ કરો
+                await apiRequest(`purchases/${dbId}`, "PUT", {
+                    ...purchase,
+                    amountPaid: newPaid,
+                    balanceDue: newBalance,
+                    paymentStatus: newStatus
+                });
+            }
+
+            // 2. પેમેન્ટ એન્ટ્રી ડેટાબેઝમાં સેવ કરો
+            await apiRequest("payments", "POST", {
+                ...paymentData,
+                partyName: paymentData.supplierName, // Backend માં partyName તરીકે સેવ થાય છે
+                id: `PAY-${Date.now()}`,
+                note: remainingAmount > 0 ? "Advance / Overpayment to Supplier" : "Bill Payment"
+            });
+
+            toast.success("Payment Success! Supplier Ledger & Purchases Updated.");
+            await refreshAllData();
+
+        } catch (error) {
+            console.error("Supplier Payment Failed:", error);
+            toast.error("Failed to update purchase records");
+        }
+    }
+
     return (
         <StoreContext.Provider value={value}>
             {children}
