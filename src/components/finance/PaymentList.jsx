@@ -41,17 +41,22 @@ export default function PaymentList() {
                 .filter(p => (p.supplierName || "").toLowerCase() === supName)
                 .reduce((sum, p) => sum + Number(p.total || 0), 0);
 
-            // 2. Down Payments (ખરીદી વખતે આપેલા રૂપિયા)
+            // 2. Down Payments (ખરીદી કરતી વખતે ફોર્મમાં 'amountPaid' માં આપેલા રૂપિયા)
             const paidInPurchases = purchases
                 .filter(p => (p.supplierName || "").toLowerCase() === supName)
                 .reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
 
-            // 3. Payments (પાછળથી Payments પેજ પરથી આપેલા રૂપિયા)
-            const paidInPayments = payments
-                .filter(p => (p.partyName || p.supplierName || "").toLowerCase() === supName)
+            // 3. Independent Payments (એવા પેમેન્ટ જે સીધા Payment પેજ પરથી આપ્યા હોય અને કોઈ બિલ સાથે જોડાયેલા ન હોય)
+            const independentPayments = payments
+                .filter(p => {
+                    const matchesName = (p.partyName || p.supplierName || "").toLowerCase() === supName;
+                    const isNotBillSettlement = p.note !== "Bill Payment";
+                    return matchesName && isNotBillSettlement;
+                })
                 .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-            const totalPaid = paidInPurchases + paidInPayments;
+            // કુલ આપેલા રૂપિયા (ખરીદી વખતે + સીધા આપેલા એડવાન્સ/અન્ય)
+            const totalPaid = paidInPurchases + independentPayments;
 
             // Balance: Positive = આપણે આપવાના બાકી છે (Due), Negative = આપણે એડવાન્સ આપેલા છે
             const balance = totalPurchases - totalPaid;
