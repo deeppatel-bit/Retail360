@@ -129,7 +129,6 @@ export function StoreProvider({ user, children }) {
                     email: profileData.email || "",
                     phone: profileData.phone || profileData.mobile || "",
                     gst: profileData.gst || profileData.gstNo || "",
-                    // ✅ Map Plan Data from Backend
                     planType: profileData.planType || "Free",
                     expiryDate: profileData.expiryDate || ""
                 });
@@ -437,43 +436,6 @@ export function StoreProvider({ user, children }) {
         }
     }
 
-    // 8. SETTINGS UPDATE
-    async function updateSettings(newSettings) {
-        try {
-            await apiRequest("stores/profile", "PUT", newSettings);
-
-            setSettings(prev => ({
-                ...prev,
-                ...newSettings,
-                phone: newSettings.mobile || newSettings.phone || prev.phone,
-                gst: newSettings.gstNo || newSettings.gst || prev.gst
-            }));
-
-            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-            localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
-
-            toast.success("Settings updated successfully");
-        } catch (e) {
-            console.error("Settings Update Failed:", e);
-        }
-    }
-
-    const value = {
-        isAppLoading, refreshAllData,
-        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, user,
-        setSettings: updateSettings,
-
-        addSupplier, editSupplier, deleteSupplier,
-        addLedger, editLedger, deleteLedger,
-        addOrUpdateProduct, deleteProduct,
-        addPurchase, updatePurchase, deletePurchase,
-        addSale, updateSale, deleteSale,
-        addReceipt, deleteReceipt,
-        addPayment, deletePayment,
-
-        receivePayment
-    };
-
     // ✅ PAY SUPPLIER (Supplier Ledger Logic)
     async function paySupplier(paymentData) {
         const { supplierName, amount } = paymentData;
@@ -539,6 +501,44 @@ export function StoreProvider({ user, children }) {
             toast.error("Failed to update purchase records");
         }
     }
+
+    // 8. SETTINGS UPDATE
+    async function updateSettings(newSettings) {
+        try {
+            await apiRequest("stores/profile", "PUT", newSettings);
+
+            setSettings(prev => ({
+                ...prev,
+                ...newSettings,
+                phone: newSettings.mobile || newSettings.phone || prev.phone,
+                gst: newSettings.gstNo || newSettings.gst || prev.gst
+            }));
+
+            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+            localStorage.setItem("user", JSON.stringify({ ...storedUser, ...newSettings }));
+
+            toast.success("Settings updated successfully");
+        } catch (e) {
+            console.error("Settings Update Failed:", e);
+        }
+    }
+
+    const value = {
+        isAppLoading, refreshAllData,
+        products, suppliers, ledgers, purchases, sales, receipts, payments, settings, user,
+        setSettings: updateSettings,
+
+        addSupplier, editSupplier, deleteSupplier,
+        addLedger, editLedger, deleteLedger,
+        addOrUpdateProduct, deleteProduct,
+        addPurchase, updatePurchase, deletePurchase,
+        addSale, updateSale, deleteSale,
+        addReceipt, deleteReceipt,
+        addPayment, deletePayment,
+
+        receivePayment,
+        paySupplier // 
+    };
 
     return (
         <StoreContext.Provider value={value}>
