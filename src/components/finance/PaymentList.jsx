@@ -8,7 +8,7 @@ import { useToast } from "../../context/ToastContext";
 const ITEMS_PER_PAGE = 9;
 
 export default function PaymentList() {
-    const { suppliers, addSupplier, editSupplier, deleteSupplier, purchases, updatePurchase, payments, paySupplier } = useStore();
+    const { suppliers, addSupplier, editSupplier, deleteSupplier, purchases, payments, paySupplier } = useStore();
     const toast = useToast();
 
     const [view, setView] = useState("manage"); // manage | report
@@ -29,25 +29,20 @@ export default function PaymentList() {
         currentDue: 0
     });
 
-    // ********** 1. BALANCE CALCULATION LOGIC FOR SUPPLIERS **********
+    // ********** 1. NEW SMART BALANCE CALCULATION LOGIC **********
     const supplierStats = useMemo(() => {
         const allSuppliers = Array.isArray(suppliers) ? suppliers : [];
 
         return allSuppliers.map((supplier) => {
             const supName = (supplier.name || "").toLowerCase();
 
-            // 1. Total Purchases (આપણે સપ્લાયર પાસેથી કેટલાનો માલ ખરીદ્યો)
-            const totalPurchases = purchases
+            // 1. ખરેખર ખરીદી પરથી બાકી નીકળતી રકમ (Sum of true Balance Due)
+            const dueFromBills = purchases
                 .filter(p => (p.supplierName || "").toLowerCase() === supName)
-                .reduce((sum, p) => sum + Number(p.total || 0), 0);
+                .reduce((sum, p) => sum + Number(p.balanceDue || 0), 0);
 
-            // 2. Down Payments (ખરીદી કરતી વખતે ફોર્મમાં 'amountPaid' માં આપેલા રૂપિયા)
-            const paidInPurchases = purchases
-                .filter(p => (p.supplierName || "").toLowerCase() === supName)
-                .reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
-
-            // 3. Independent Payments (એવા પેમેન્ટ જે સીધા Payment પેજ પરથી આપ્યા હોય અને કોઈ બિલ સાથે જોડાયેલા ન હોય)
-            const independentPayments = payments
+            // 2. એડવાન્સ પેમેન્ટ્સ (જે બિલ સાથે સેટલ નથી થયા)
+            const advancePayments = payments
                 .filter(p => {
                     const matchesName = (p.partyName || p.supplierName || "").toLowerCase() === supName;
                     const isNotBillSettlement = p.note !== "Bill Payment";
@@ -55,11 +50,22 @@ export default function PaymentList() {
                 })
                 .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-            // કુલ આપેલા રૂપિયા (ખરીદી વખતે + સીધા આપેલા એડવાન્સ/અન્ય)
-            const totalPaid = paidInPurchases + independentPayments;
+            // ફાઇનલ બેલેન્સ (Due માંથી Advance માઇનસ કરો)
+            const balance = dueFromBills - advancePayments;
 
-            // Balance: Positive = આપણે આપવાના બાકી છે (Due), Negative = આપણે એડવાન્સ આપેલા છે
-            const balance = totalPurchases - totalPaid;
+            // Report Table માટે Display Values:
+            const totalPurchases = purchases
+                .filter(p => (p.supplierName || "").toLowerCase() === supName)
+                .reduce((sum, p) => {
+                    let t = Number(p.total || 0);
+                    // જો કોઈ કારણસર total 0 સેવ થઇ ગયું હોય પણ balanceDue હોય, તો તેને સાચું total ગણીએ
+                    if (t === 0 && (Number(p.balanceDue) > 0 || Number(p.amountPaid) > 0)) {
+                        t = Number(p.amountPaid || 0) + Number(p.balanceDue || 0);
+                    }
+                    return sum + t;
+                }, 0);
+
+            const totalPaid = totalPurchases - balance;
 
             return {
                 ...supplier,
@@ -110,7 +116,6 @@ export default function PaymentList() {
             return toast.error("Enter valid amount");
         }
 
-        // StoreContext માં બનાવેલું નવું ફંક્શન કોલ થશે
         await paySupplier({
             supplierName: paymentForm.supplierName,
             amount: Number(paymentForm.amount),
